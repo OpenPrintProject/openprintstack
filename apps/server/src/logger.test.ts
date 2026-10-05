@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Open Print Stack contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import { stripVTControlCharacters } from "node:util";
+
 import { describe, expect, it } from "vitest";
 
 import type { LogLevel, RuntimeEnv } from "./config.ts";
@@ -71,7 +73,9 @@ describe("createLogger", () => {
 
     logger.info({ user: { name: "rob", password: SECRET } }, "Logged in");
 
-    const text = output.lines.join("");
+    // pino-pretty colours its output wherever it detects colour support,
+    // which includes CI, so compare the text without the colour codes.
+    const text = stripVTControlCharacters(output.lines.join(""));
     expect(text).toMatch(/INFO \(\d+\): Logged in/);
     expect(text).toContain('"password": "[Redacted]"');
     expect(text).not.toContain(SECRET);
