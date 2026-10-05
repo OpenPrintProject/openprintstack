@@ -41,7 +41,7 @@ The `main` branch is protected, so all changes go through pull requests.
 
 - Use the imperative mood, such as "Add printer status endpoint" rather than "Added printer status endpoint".
 - Keep the first line short, ideally under 72 characters.
-- Explain the *why* in the body when it isn't obvious.
+- Explain the _why_ in the body when it isn't obvious.
 
 ## Licensing
 
