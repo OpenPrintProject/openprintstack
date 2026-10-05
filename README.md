@@ -1,12 +1,12 @@
 # Open Print Stack
 
-> **Print management that's yours.** Self-hosted, private and free for everyone, whether you run one printer or a hundred.
+> **3D print management that's yours.** Self-hosted, private and free for everyone, whether you run one 3D printer or a hundred.
 
 ## Overview
 
 Printing shouldn't mean handing your files to someone else's cloud, signing up for a subscription or living with a tool that only works at one scale.
 
-Open Print Stack is a print management tool that runs entirely on your own hardware:
+Open Print Stack is a 3D print management tool that runs entirely on your own hardware:
 
 - **Completely self-hosted.** It runs on your own infrastructure, with no external services required.
 - **Private by design.** Your print jobs and data never leave your network.
@@ -43,8 +43,8 @@ _Outline the main directories and what they contain once the layout settles._
 
 ## Contributing
 
-Contributions are welcome. _Add guidelines for issues, branches and pull requests here._
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) to get started. To report a security issue, follow [SECURITY.md](SECURITY.md).
 
 ## License
 
-Open Print Stack is licensed under the [GNU Affero General Public License v3.0](LICENSE).
+Open Print Stack is licensed under the [GNU Affero General Public License v3.0 or later](LICENSE) (`AGPL-3.0-or-later`).
