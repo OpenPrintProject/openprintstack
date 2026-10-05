@@ -22,6 +22,20 @@ const nodeBuiltins = {
   ],
 };
 
+// Globals that exist in Node but not in browsers (process, Buffer, require...).
+// Shared ones such as structuredClone, URL and setTimeout stay allowed. Node's
+// types can still reach browser-safe packages through Vitest's, so tsc alone
+// doesn't catch these. checkGlobalObject also catches `globalThis.process`.
+const nodeGlobals = {
+  globals: Object.keys(globals.node)
+    .filter((name) => !Object.hasOwn(globals.browser, name))
+    .map((name) => ({
+      name,
+      message: "This package must not depend on Node globals.",
+    })),
+  checkGlobalObject: true,
+};
+
 const serverAndStorage = [
   {
     group: ["@openprintstack/server", "@openprintstack/server/*"],
@@ -79,6 +93,7 @@ export default defineConfig(
           ],
         },
       ],
+      "no-restricted-globals": ["error", nodeGlobals],
     },
   },
   {
@@ -104,6 +119,7 @@ export default defineConfig(
           ],
         },
       ],
+      "no-restricted-globals": ["error", nodeGlobals],
     },
   },
   {
