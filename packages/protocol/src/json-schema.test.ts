@@ -9,8 +9,10 @@ import { z } from "zod";
 
 import {
   ApiError,
+  Camera,
   OpsEvent,
   PrinterCommand,
+  PrinterFile,
   PrinterSnapshot,
   WsClientMessage,
   WsServerMessage,
@@ -20,8 +22,10 @@ describe("JSON Schema", () => {
   it("converts every top-level schema, with each id defined once", () => {
     const all = z.object({
       ApiError,
+      Camera,
       OpsEvent,
       PrinterCommand,
+      PrinterFile,
       PrinterSnapshot,
       WsClientMessage,
       WsServerMessage,
@@ -33,12 +37,14 @@ describe("JSON Schema", () => {
     expect(definitions).toEqual(
       expect.arrayContaining([
         "ApiError",
+        "Camera",
         "Capabilities",
         "CommandKind",
         "EventType",
         "MotionMoveCommand",
         "OpsEvent",
         "PrinterCommand",
+        "PrinterFile",
         "PrinterSnapshot",
         "PrinterState",
         "PrinterStatus",
