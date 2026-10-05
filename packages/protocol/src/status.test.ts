@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { PrinterStatus } from "./index.ts";
+import { isOnline, ONLINE_STATUSES, PrinterStatus } from "./index.ts";
 
 describe("PrinterStatus", () => {
   it("accepts every normalised status", () => {
@@ -14,5 +14,18 @@ describe("PrinterStatus", () => {
 
   it("rejects anything else", () => {
     expect(PrinterStatus.safeParse("complete").success).toBe(false);
+  });
+});
+
+describe("isOnline", () => {
+  it("is false only while offline or connecting", () => {
+    const offline = PrinterStatus.options.filter((s) => !isOnline(s));
+
+    expect(offline).toEqual(["connecting", "offline"]);
+  });
+
+  it("counts a printer in error as online", () => {
+    expect(isOnline("error")).toBe(true);
+    expect(ONLINE_STATUSES).toContain("error");
   });
 });
