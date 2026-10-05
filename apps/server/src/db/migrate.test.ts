@@ -7,9 +7,8 @@ import path from "node:path";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import { describe, expect, it, onTestFinished } from "vitest";
 
-import { createLogger } from "../logger.ts";
 import {
-  captureLines,
+  debugLogger,
   jsonLines,
   silentLogger,
   tempDir,
@@ -29,15 +28,6 @@ async function freshDatabase(): Promise<{ db: Db; file: string; dir: string }> {
     db.$client.close();
   });
   return { db, file, dir };
-}
-
-async function debugLogger() {
-  const output = captureLines();
-  const logger = await createLogger(
-    { env: "production", logLevel: "debug" },
-    output,
-  );
-  return { logger, output };
 }
 
 function tables(db: Db): unknown[] {

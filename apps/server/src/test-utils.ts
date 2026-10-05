@@ -6,11 +6,14 @@ import os from "node:os";
 import path from "node:path";
 import { Writable } from "node:stream";
 
+import type { OpsEvent } from "@openprintstack/protocol";
 import pino from "pino";
 import { onTestFinished } from "vitest";
 
+import type { EventDraft } from "./bus/bus.ts";
 import { type Db, openDatabase } from "./db/client.ts";
 import { migrateDatabase } from "./db/migrate.ts";
+import { createLogger, type Logger } from "./logger.ts";
 
 // Helpers for the tests. Not used by the server itself.
 
@@ -60,4 +63,31 @@ export function jsonLines(
   return capture.lines.map(
     (line) => JSON.parse(line) as Record<string, unknown>,
   );
+}
+
+/** A JSON logger at debug level that keeps every line it writes. */
+export async function debugLogger(): Promise<{
+  logger: Logger;
+  output: ReturnType<typeof captureLines>;
+}> {
+  const output = captureLines();
+  const logger = await createLogger(
+    { env: "production", logLevel: "debug" },
+    output,
+  );
+  return { logger, output };
+}
+
+/**
+ * The event as a publisher would write it, without the fields the bus stamps.
+ * A copy, so the bus freezing it leaves the shared fixtures alone.
+ */
+export function draftOf(event: OpsEvent): EventDraft {
+  return structuredClone({
+    type: event.type,
+    printerId: event.printerId,
+    source: event.source,
+    correlationId: event.correlationId,
+    payload: event.payload,
+  }) as EventDraft;
 }

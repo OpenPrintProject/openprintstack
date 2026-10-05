@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Open Print Stack contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { eq } from "drizzle-orm";
+import { eq, lte } from "drizzle-orm";
 
 import type { Db } from "../client.ts";
 import { sessions } from "../schema.ts";
@@ -44,5 +44,14 @@ export class SessionsRepo {
 
   findById(id: string): Session | undefined {
     return this.#db.select().from(sessions).where(eq(sessions.id, id)).get();
+  }
+
+  /**
+   * Deletes every session that has expired by `now` (`expires_at <= now`) and
+   * returns how many it deleted. Uses `sessions_expires_at_idx`.
+   */
+  deleteExpired(now: number): number {
+    return this.#db.delete(sessions).where(lte(sessions.expiresAt, now)).run()
+      .changes;
   }
 }

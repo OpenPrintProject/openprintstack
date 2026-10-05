@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { OpsEvent } from "@openprintstack/protocol";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, lt } from "drizzle-orm";
 
 import type { Db } from "../client.ts";
 import { events } from "../schema.ts";
@@ -29,6 +29,21 @@ export class EventsRepo {
         tx.insert(events).values(row).run();
       }
     });
+  }
+
+  /**
+   * Deletes up to `limit` telemetry events with `ts` before `cutoffMs` and
+   * returns how many it deleted. Other categories are never deleted. Uses
+   * `events_category_ts_idx`.
+   */
+  deleteTelemetryBefore(cutoffMs: number, limit: number): number {
+    const batch = this.#db
+      .select({ rowId: events.rowId })
+      .from(events)
+      .where(and(eq(events.category, "telemetry"), lt(events.ts, cutoffMs)))
+      .limit(limit);
+    return this.#db.delete(events).where(inArray(events.rowId, batch)).run()
+      .changes;
   }
 
   /** The stored event, checked against `OpsEvent`. */

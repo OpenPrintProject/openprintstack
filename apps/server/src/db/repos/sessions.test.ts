@@ -84,4 +84,27 @@ describe("SessionsRepo", () => {
       expect.objectContaining({ code: "SQLITE_CONSTRAINT_PRIMARYKEY" }),
     );
   });
+
+  it("deletes sessions that have expired by now, and returns how many", async () => {
+    const { repos, userId } = await setup();
+    const add = (id: string, expiresAt: number) =>
+      repos.sessions.create({
+        id,
+        userId,
+        now: 0,
+        expiresAt,
+        ip: null,
+        userAgent: null,
+      });
+    add("a", 999);
+    add("b", 1000);
+    add("c", 1001);
+
+    expect(repos.sessions.deleteExpired(1000)).toBe(2);
+
+    expect(repos.sessions.findById("a")).toBeUndefined();
+    expect(repos.sessions.findById("b")).toBeUndefined();
+    expect(repos.sessions.findById("c")).toBeDefined();
+    expect(repos.sessions.deleteExpired(1000)).toBe(0);
+  });
 });
