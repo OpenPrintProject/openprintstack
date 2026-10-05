@@ -30,6 +30,8 @@ jobs:
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
+      - name: Check the migrations match the schema
+        run: pnpm --filter @openprintstack/server db:drift
       - run: pnpm test
       - run: pnpm build
 

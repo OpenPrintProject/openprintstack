@@ -19,3 +19,10 @@ catalog:
   typescript-eslint: ^8.71.0
   vitest: ^5.0.3
   zod: ^4.6.5
+
+# Dependencies whose install scripts may run. pnpm refuses to install while any
+# dependency's script is neither allowed nor denied.
+allowBuilds:
+  # drizzle-kit's esbuild. Its script only checks the platform binary, which
+  # drizzle-kit doesn't need.
+  esbuild: false
