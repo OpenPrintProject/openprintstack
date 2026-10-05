@@ -209,3 +209,52 @@ describe("EventsRepo", () => {
     expect(() => repo.findById(login.id)).toThrow(z.ZodError);
   });
 });
+
+describe("EventsRepo.deleteTelemetryBefore", () => {
+  const cutoff = Date.parse(TS);
+
+  /** A copy of the fixture with its own id, `msBefore` ms before the cutoff. */
+  function before(fixture: OpsEvent, msBefore: number, n: number): OpsEvent {
+    return {
+      ...fixture,
+      id: eventId(100 + n),
+      ts: new Date(cutoff - msBefore).toISOString(),
+    };
+  }
+
+  it("deletes only telemetry from before the cutoff", async () => {
+    const { db, repo } = await setup();
+    const old = ALL.map((event, n) => before(event, 1000, n));
+    const atCutoff = before(eventFixtures["printer.telemetry"], 0, 50);
+    repo.insertMany([...old, atCutoff]);
+
+    expect(repo.deleteTelemetryBefore(cutoff, 100)).toBe(1);
+
+    expect(
+      db
+        .select({ type: events.type })
+        .from(events)
+        .orderBy(asc(events.rowId))
+        .all()
+        .map((row) => row.type),
+    ).toEqual([
+      ...ALL.map((event) => event.type).filter(
+        (t) => t !== "printer.telemetry",
+      ),
+      "printer.telemetry",
+    ]);
+    expect(repo.findById(atCutoff.id)).toEqual(atCutoff);
+  });
+
+  it("deletes at most `limit` rows per call and returns how many", async () => {
+    const { db, repo } = await setup();
+    const telemetry = eventFixtures["printer.telemetry"];
+    repo.insertMany([1, 2, 3].map((n) => before(telemetry, n, n)));
+
+    expect(repo.deleteTelemetryBefore(cutoff, 2)).toBe(2);
+    expect(count(db)).toBe(1);
+    expect(repo.deleteTelemetryBefore(cutoff, 2)).toBe(1);
+    expect(repo.deleteTelemetryBefore(cutoff, 2)).toBe(0);
+    expect(count(db)).toBe(0);
+  });
+});
