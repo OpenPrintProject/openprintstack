@@ -6,5 +6,8 @@ import { defineProject } from "vitest/config";
 export default defineProject({
   test: {
     name: "protocol",
+    // Runs the expectTypeOf tests in *.test-d.ts through tsc, so `pnpm test`
+    // reports them alongside the runtime tests.
+    typecheck: { enabled: true, tsconfig: "./tsconfig.json" },
   },
 });
