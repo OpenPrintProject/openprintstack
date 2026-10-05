@@ -12,6 +12,7 @@ path = [
   "pnpm-lock.yaml",
   ".node-version",
   ".gitignore",
+  "apps/server/drizzle/**",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Open Print Stack contributors"
