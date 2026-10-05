@@ -7,12 +7,14 @@ import { describe, expectTypeOf, it } from "vitest";
 
 import type {
   ApiError,
+  Camera,
   Capabilities,
   CommandKind,
   EventType,
   OpsEvent,
   OpsEventOf,
   PrinterCommand,
+  PrinterFile,
   PrinterSnapshot,
   PrinterState,
   Serializable,
@@ -39,6 +41,8 @@ describe("Serializable", () => {
     expectTypeOf<PrinterState>().toExtend<Serializable>();
     expectTypeOf<Capabilities>().toExtend<Serializable>();
     expectTypeOf<Telemetry>().toExtend<Serializable>();
+    expectTypeOf<PrinterFile>().toExtend<Serializable>();
+    expectTypeOf<Camera>().toExtend<Serializable>();
   });
 
   it("accepts primitives, null, arrays, plain objects and Uint8Array", () => {
@@ -69,6 +73,7 @@ describe("timestamps", () => {
   it("are ISO strings, never Date", () => {
     expectTypeOf<OpsEvent["ts"]>().toEqualTypeOf<string>();
     expectTypeOf<PrinterState["updatedAt"]>().toEqualTypeOf<string>();
+    expectTypeOf<PrinterFile["modifiedAt"]>().toEqualTypeOf<string | null>();
   });
 });
 

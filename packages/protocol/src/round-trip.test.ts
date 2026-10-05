@@ -9,16 +9,20 @@ import type { z } from "zod";
 
 import {
   apiErrorFixture,
+  cameraFixture,
   commandFixtures,
   eventFixtures,
+  printerFileFixtures,
   snapshotFixture,
   wsClientMessageFixtures,
   wsServerMessageFixtures,
 } from "./fixtures.ts";
 import {
   ApiError,
+  Camera,
   OpsEvent,
   PrinterCommand,
+  PrinterFile,
   PrinterSnapshot,
   WsClientMessage,
   WsServerMessage,
@@ -47,6 +51,12 @@ const cases: Case[] = [
     WsServerMessage,
     message,
   ]),
+  ...printerFileFixtures.map((file): Case => [
+    `printer file ${file.name}`,
+    PrinterFile,
+    file,
+  ]),
+  ["camera", Camera, cameraFixture],
   ["printer snapshot", PrinterSnapshot, snapshotFixture],
   ["API error", ApiError, apiErrorFixture],
 ];

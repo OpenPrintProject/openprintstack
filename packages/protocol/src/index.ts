@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 export { ApiError } from "./api.ts";
+export { Camera } from "./cameras.ts";
 export {
   Capabilities,
   Fan,
@@ -54,6 +55,7 @@ export {
   SystemStartedEvent,
   SystemStoppingEvent,
 } from "./events.ts";
+export { PrinterFile } from "./files.ts";
 export { COMMAND_POLICY, type CommandPolicy } from "./policy.ts";
 export { initialPrinterState, reducePrinterState } from "./reducer.ts";
 export type { Serializable } from "./serializable.ts";

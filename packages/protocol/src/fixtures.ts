@@ -4,9 +4,11 @@
 // Sample values for the tests: one of every command, event and message.
 
 import type { ApiError } from "./api.ts";
+import type { Camera } from "./cameras.ts";
 import type { Capabilities } from "./capabilities.ts";
 import type { CommandKind, PrinterCommandOf } from "./commands.ts";
 import type { EventType, OpsEventOf } from "./events.ts";
+import type { PrinterFile } from "./files.ts";
 import type { PrinterSnapshot } from "./state.ts";
 import type { Telemetry } from "./telemetry.ts";
 import type { WsClientMessage, WsServerMessage } from "./ws.ts";
@@ -361,3 +363,10 @@ export const apiErrorFixture: ApiError = {
     details: [{ path: ["targetC"], message: "Too small" }],
   },
 };
+
+export const printerFileFixtures: PrinterFile[] = [
+  { name: "benchy.gcode", sizeBytes: 1_234_567, modifiedAt: TS },
+  { name: "calibration cube.gcode", sizeBytes: null, modifiedAt: null },
+];
+
+export const cameraFixture: Camera = { id: "chamber", label: "Chamber" };
