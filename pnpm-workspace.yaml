@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 Open Print Stack contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+packages:
+  - apps/*
+  - packages/*
+
+# One version of each shared dependency across the workspace. zod in particular
+# must have a single copy, because schema metadata lives in its global registry.
+catalog:
+  "@eslint/js": ^10.0.1
+  "@types/node": ^26.6.4
+  eslint: ^10.12.0
+  eslint-config-prettier: ^10.1.8
+  globals: ^17.13.0
+  prettier: ^3.9.9
+  # typescript-eslint supports TypeScript <6.1.0, so stay on 6.0.x until it supports newer releases.
+  typescript: ~6.0.3
+  typescript-eslint: ^8.71.0
+  vitest: ^5.0.3
+  zod: ^4.6.5

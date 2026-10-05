@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Open Print Stack contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+version = 1
+
+# Files that can't carry a comment header (JSON, lockfiles, generated output)
+# and documentation are covered here. Source files carry their own header.
+[[annotations]]
+path = [
+  "**/*.json",
+  "**/*.md",
+  "pnpm-lock.yaml",
+  ".node-version",
+  ".gitignore",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Open Print Stack contributors"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 Open Print Stack contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+pnpm-lock.yaml
+LICENSE
+LICENSES/
+**/*.gen.ts
+apps/server/drizzle/
+apps/server/openapi.json
