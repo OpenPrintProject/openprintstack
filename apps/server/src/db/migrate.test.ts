@@ -39,6 +39,9 @@ function tables(db: Db): unknown[] {
     .all();
 }
 
+/** The two committed migrations: 0000_init and 0001_event_paging_indexes. */
+const COMMITTED = 2;
+
 function appliedCount(db: Db): unknown {
   return db.$client
     .prepare("SELECT count(*) FROM __drizzle_migrations")
@@ -88,7 +91,7 @@ describe("migrateDatabase", () => {
     );
     expect(
       readMigrationFiles({ migrationsFolder: MIGRATIONS_FOLDER }),
-    ).toHaveLength(1);
+    ).toHaveLength(COMMITTED);
   });
 
   it("creates the plan's four tables on a fresh database", async () => {
@@ -104,14 +107,33 @@ describe("migrateDatabase", () => {
       "sessions",
       "users",
     ]);
-    expect(appliedCount(db)).toBe(1);
+    expect(appliedCount(db)).toBe(COMMITTED);
     expect(jsonLines(output)).toMatchObject([
       {
         level: "info",
         component: "db",
-        applied: 1,
+        applied: COMMITTED,
         msg: "Applied database migrations",
       },
+    ]);
+  });
+
+  it("indexes events for paging by row_id", async () => {
+    const { db } = await freshDatabase();
+
+    migrateDatabase(db, silentLogger);
+
+    expect(
+      db.$client
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'events' AND name LIKE '%row_id%' ORDER BY name",
+        )
+        .pluck()
+        .all(),
+    ).toEqual([
+      "events_category_row_id_idx",
+      "events_printer_id_row_id_idx",
+      "events_type_row_id_idx",
     ]);
   });
 
@@ -128,7 +150,7 @@ describe("migrateDatabase", () => {
     migrateDatabase(reopened, logger);
     migrateDatabase(reopened, logger);
 
-    expect(appliedCount(reopened)).toBe(1);
+    expect(appliedCount(reopened)).toBe(COMMITTED);
     expect(jsonLines(output)).toMatchObject([
       { level: "debug", component: "db", msg: "Database schema is up to date" },
       { level: "debug", component: "db", msg: "Database schema is up to date" },
@@ -146,7 +168,7 @@ describe("migrateDatabase", () => {
     migrateDatabase(db, logger, later);
 
     expect(tables(db)).toContain("later");
-    expect(appliedCount(db)).toBe(2);
+    expect(appliedCount(db)).toBe(COMMITTED + 1);
     expect(jsonLines(output)).toMatchObject([{ applied: 1 }]);
   });
 
@@ -163,7 +185,7 @@ describe("migrateDatabase", () => {
     expect(() => migrateDatabase(db, silentLogger)).toThrow(
       `${file} was updated by a newer version of Open Print Stack, so this version can't use it.`,
     );
-    expect(appliedCount(db)).toBe(2);
+    expect(appliedCount(db)).toBe(COMMITTED + 1);
   });
 
   it("applies nothing if any statement of any migration fails", async () => {

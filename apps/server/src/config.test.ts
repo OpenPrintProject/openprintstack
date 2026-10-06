@@ -12,6 +12,7 @@ import {
   ConfigError,
   defaultDataDir,
   loadConfig,
+  normalizeHostName,
 } from "./config.ts";
 
 const CWD = "/work";
@@ -37,6 +38,7 @@ describe("loadConfig", () => {
       env: "production",
       host: "127.0.0.1",
       port: 7337,
+      allowedHosts: [],
       dataDir: defaultDataDir(),
       logLevel: "info",
       telemetry: { sampleIntervalMs: 5000, retentionDays: 7 },
@@ -49,6 +51,7 @@ describe("loadConfig", () => {
         OPS_ENV: "development",
         OPS_HOST: "0.0.0.0",
         OPS_PORT: "8080",
+        OPS_ALLOWED_HOSTS: "printers.local,192.168.1.20",
         OPS_DATA_DIR: "/srv/ops",
         OPS_LOG_LEVEL: "debug",
         OPS_TELEMETRY_SAMPLE_INTERVAL_MS: "1000",
@@ -58,6 +61,7 @@ describe("loadConfig", () => {
       env: "development",
       host: "0.0.0.0",
       port: 8080,
+      allowedHosts: ["printers.local", "192.168.1.20"],
       dataDir: "/srv/ops",
       logLevel: "debug",
       telemetry: { sampleIntervalMs: 1000, retentionDays: 30 },
@@ -69,6 +73,7 @@ describe("loadConfig", () => {
       "OPS_ENV",
       "OPS_HOST",
       "OPS_PORT",
+      "OPS_ALLOWED_HOSTS",
       "OPS_DATA_DIR",
       "OPS_LOG_LEVEL",
       "OPS_TELEMETRY_SAMPLE_INTERVAL_MS",
@@ -93,6 +98,7 @@ describe("loadConfig", () => {
     const config = load({});
     expect(Object.isFrozen(config)).toBe(true);
     expect(Object.isFrozen(config.telemetry)).toBe(true);
+    expect(Object.isFrozen(config.allowedHosts)).toBe(true);
   });
 
   describe("OPS_ENV", () => {
@@ -118,6 +124,30 @@ describe("loadConfig", () => {
     it.each(["local host", " 127.0.0.1", "\t"])("refuses %j", (value) => {
       expect(problems({ OPS_HOST: value })).toEqual([
         `OPS_HOST must not contain spaces (got ${JSON.stringify(value)})`,
+      ]);
+    });
+  });
+
+  describe("OPS_ALLOWED_HOSTS", () => {
+    it("normalises each name, dropping blanks and repeats", () => {
+      expect(
+        load({
+          OPS_ALLOWED_HOSTS:
+            " Printers.LOCAL , ,192.168.1.20,::1,printers.local,",
+        }).allowedHosts,
+      ).toEqual(["printers.local", "192.168.1.20", "[::1]"]);
+    });
+
+    it.each([
+      "printers.local:7337",
+      "http://printers.local",
+      "printers.local/x",
+      "a b",
+      "user@printers.local",
+      "printers.local,*",
+    ])("refuses %j", (value) => {
+      expect(problems({ OPS_ALLOWED_HOSTS: value })).toEqual([
+        `OPS_ALLOWED_HOSTS must be a comma-separated list of host names without ports, such as printers.local,192.168.1.20 (got ${JSON.stringify(value)})`,
       ]);
     });
   });
@@ -266,6 +296,37 @@ describe("loadConfig", () => {
         '  OPS_TELEMETRY_RETENTION_DAYS must be a whole number from 1 to 3650 (got "0")',
       ].join("\n"),
     );
+  });
+});
+
+describe("normalizeHostName", () => {
+  it.each([
+    ["localhost", "localhost"],
+    ["LOCALHOST", "localhost"],
+    ["127.0.0.1", "127.0.0.1"],
+    ["::1", "[::1]"],
+    ["[::1]", "[::1]"],
+    ["0.0.0.0", "0.0.0.0"],
+    ["printers.local", "printers.local"],
+    ["drucker-österreich.local", "xn--drucker-sterreich-6zb.local"],
+  ])("normalises %s to %s", (value, expected) => {
+    expect(normalizeHostName(value)).toBe(expected);
+  });
+
+  it.each([
+    "",
+    "localhost:7337",
+    "[::1]:7337",
+    "http://localhost",
+    "local host",
+    "a/b",
+    "a?b",
+    "a#b",
+    "a\\b",
+    "user@host",
+    "*",
+  ])("refuses %j", (value) => {
+    expect(normalizeHostName(value)).toBeUndefined();
   });
 });
 

@@ -25,7 +25,7 @@ export {
   PrintStartCommand,
   TemperatureSetCommand,
 } from "./commands.ts";
-export { Axis, ErrorInfo, Id, IsoDateTime } from "./common.ts";
+export { Axis, ErrorInfo, Id, IsoDateTime, JsonValue } from "./common.ts";
 export {
   AlertSeverity,
   AuthLoginFailedEvent,

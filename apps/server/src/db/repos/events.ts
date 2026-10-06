@@ -1,14 +1,43 @@
 // SPDX-FileCopyrightText: 2026 Open Print Stack contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { OpsEvent } from "@openprintstack/protocol";
-import { and, eq, inArray, lt } from "drizzle-orm";
+import {
+  type EventCategory,
+  type EventType,
+  OpsEvent,
+} from "@openprintstack/protocol";
+import { and, desc, eq, inArray, lt, ne, type SQL } from "drizzle-orm";
 
 import type { Db } from "../client.ts";
 import { events } from "../schema.ts";
 
 type EventRow = typeof events.$inferSelect;
 type NewEventRow = typeof events.$inferInsert;
+
+/** Which events a page holds. Empty lists are the same as leaving them out. */
+export type EventPageQuery = {
+  printerId?: string;
+  /** Any of these types. */
+  types?: readonly EventType[];
+  /** Any of these categories. */
+  categories?: readonly EventCategory[];
+  /**
+   * Telemetry is left out unless this is true, or `types` or `categories`
+   * names it.
+   */
+  includeTelemetry?: boolean;
+  /** Only events written before this one: the previous page's `nextCursor`. */
+  before?: number;
+  /** At most this many events. */
+  limit: number;
+};
+
+export type EventPage = {
+  /** Newest first, in the order they were written. */
+  events: OpsEvent[];
+  /** The `before` for the next (older) page, or null if there's none. */
+  nextCursor: number | null;
+};
 
 export class EventsRepo {
   readonly #db: Db;
@@ -44,6 +73,55 @@ export class EventsRepo {
       .limit(limit);
     return this.#db.delete(events).where(inArray(events.rowId, batch)).run()
       .changes;
+  }
+
+  /**
+   * One page of events, newest first by `row_id` (the order they were
+   * written). Each filter has an index on (filter, row_id), so a page reads
+   * only the rows it returns; several types or categories at once sort just
+   * the rows of those.
+   */
+  page(query: EventPageQuery): EventPage {
+    if (!Number.isInteger(query.limit) || query.limit < 1) {
+      throw new Error(
+        `The page limit must be a whole number from 1: ${query.limit}`,
+      );
+    }
+    const types = query.types ?? [];
+    const categories = query.categories ?? [];
+    const conditions: SQL[] = [];
+    if (query.printerId !== undefined) {
+      conditions.push(eq(events.printerId, query.printerId));
+    }
+    if (types.length > 0) {
+      conditions.push(inArray(events.type, [...types]));
+    }
+    if (categories.length > 0) {
+      conditions.push(inArray(events.category, [...categories]));
+    }
+    const namesTelemetry =
+      types.includes("printer.telemetry") || categories.includes("telemetry");
+    if (query.includeTelemetry !== true && !namesTelemetry) {
+      conditions.push(ne(events.category, "telemetry"));
+    }
+    if (query.before !== undefined) {
+      conditions.push(lt(events.rowId, query.before));
+    }
+    const rows = this.#db
+      .select()
+      .from(events)
+      .where(and(...conditions))
+      .orderBy(desc(events.rowId))
+      .limit(query.limit + 1)
+      .all();
+    const page = rows.slice(0, query.limit);
+    return {
+      events: page.map(toEvent),
+      nextCursor:
+        rows.length > query.limit
+          ? (page[page.length - 1]?.rowId ?? null)
+          : null,
+    };
   }
 
   /** The stored event, checked against `OpsEvent`. */
