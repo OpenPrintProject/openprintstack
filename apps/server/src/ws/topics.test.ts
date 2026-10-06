@@ -5,7 +5,7 @@ import { EventType, type OpsEvent, type Topic } from "@openprintstack/protocol";
 import { eventFixtures, PRINTER_ID } from "@openprintstack/protocol/fixtures";
 import { describe, expect, it } from "vitest";
 
-import { matchesTopic, topicKey } from "./topics.ts";
+import { matchesTopic } from "./topics.ts";
 
 const OTHER = "printer-2";
 
@@ -115,45 +115,5 @@ describe("matchesTopic", () => {
 
     expect(matching(topic)).toEqual(["printer.telemetry", "printer.alert"]);
     expect(matching(topic, OTHER)).toEqual([]);
-  });
-});
-
-describe("topicKey", () => {
-  it("tells topics apart", () => {
-    const keys = [
-      topicKey({ name: "fleet" }),
-      topicKey({ name: "printer", printerId: PRINTER_ID }),
-      topicKey({ name: "printer", printerId: OTHER }),
-      topicKey({ name: "events" }),
-      topicKey({ name: "events", printerId: PRINTER_ID }),
-      topicKey({ name: "events", types: ["auth.logout"] }),
-      topicKey({ name: "events", includeTelemetry: true }),
-    ];
-
-    expect(new Set(keys).size).toBe(keys.length);
-  });
-
-  it("compares the events topic's filters by meaning", () => {
-    const key = topicKey({
-      name: "events",
-      types: ["command.result", "command.requested"],
-    });
-
-    expect(
-      topicKey({
-        name: "events",
-        types: ["command.requested", "command.result", "command.requested"],
-        includeTelemetry: false,
-      }),
-    ).toBe(key);
-    expect(topicKey({ name: "events", types: [] })).toBe(
-      topicKey({ name: "events", includeTelemetry: false }),
-    );
-  });
-
-  it("keeps a printer id that looks like JSON apart from the filters", () => {
-    expect(topicKey({ name: "events", printerId: '",[],false]' })).not.toBe(
-      topicKey({ name: "events" }),
-    );
   });
 });

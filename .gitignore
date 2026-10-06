@@ -15,6 +15,8 @@
 node_modules/
 dist/
 build/
+# TanStack Router's generator writes here first, then renames into place.
+.tanstack/
 __pycache__/
 .venv/
 

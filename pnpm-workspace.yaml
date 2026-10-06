@@ -17,6 +17,8 @@ catalog:
   # typescript-eslint supports TypeScript <6.1.0, so stay on 6.0.x until it supports newer releases.
   typescript: ~6.0.3
   typescript-eslint: ^8.71.0
+  # Vitest runs on Vite too, so the web app and the tests share one copy.
+  vite: ^8.3.2
   vitest: ^5.0.3
   zod: ^4.6.5
 

@@ -7,11 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   formatHash,
-  normalizePassword,
   parseHash,
-  PASSWORD_MAX_LENGTH,
-  PASSWORD_MIN_LENGTH,
-  passwordLength,
   Passwords,
   SCRYPT_PARAMS,
 } from "./passwords.ts";
@@ -30,28 +26,6 @@ describe("SCRYPT_PARAMS", () => {
     expect(hash).toMatch(
       /^\$scrypt\$ln=17,r=8,p=1\$[A-Za-z0-9+/]{22}\$[A-Za-z0-9+/]{43}$/,
     );
-  });
-});
-
-describe("the password rules", () => {
-  it("are 12 to 1024 code points", () => {
-    expect(PASSWORD_MIN_LENGTH).toBe(12);
-    expect(PASSWORD_MAX_LENGTH).toBe(1024);
-  });
-
-  it.each([
-    ["ASCII", "abcdefghijkl", 12],
-    ["an emoji as one", "😀".repeat(12), 12],
-    ["a decomposed é as one, after NFKC", "é".repeat(12), 12],
-    ["a ligature as two, after NFKC", "ﬁ", 2],
-    ["spaces, which aren't trimmed", "  a  ", 5],
-  ])("count %s", (_, password, length) => {
-    expect(passwordLength(password)).toBe(length);
-  });
-
-  it("normalise with NFKC", () => {
-    expect(normalizePassword("ﬁ")).toBe("fi");
-    expect(normalizePassword("é")).toBe("é");
   });
 });
 

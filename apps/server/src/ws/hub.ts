@@ -5,6 +5,7 @@ import {
   type OpsEvent,
   type SessionUser,
   type Topic,
+  topicKey,
   WsClientMessage,
   WsServerMessage,
 } from "@openprintstack/protocol";
@@ -14,7 +15,7 @@ import type { SessionService } from "../auth/sessions.ts";
 import type { EventBus } from "../bus/bus.ts";
 import type { Logger } from "../logger.ts";
 import type { StateStore } from "../state/store.ts";
-import { matchesTopic, topicKey } from "./topics.ts";
+import { matchesTopic } from "./topics.ts";
 
 // Every open socket at /api/ws, its user and its topics. The route (route.ts)
 // checks Host, Origin and the session before a socket gets here.

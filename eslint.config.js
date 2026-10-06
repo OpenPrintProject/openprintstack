@@ -6,6 +6,7 @@ import { builtinModules } from "node:module";
 import js from "@eslint/js";
 import { defineConfig, globalIgnores } from "eslint/config";
 import prettier from "eslint-config-prettier";
+import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
@@ -34,6 +35,11 @@ const nodeGlobals = {
       message: "This package must not depend on Node globals.",
     })),
   checkGlobalObject: true,
+};
+
+const noDrivers = {
+  group: ["@openprintstack/driver-*", "@openprintstack/driver-*/*"],
+  message: "The web app talks to printers through the API only.",
 };
 
 const serverAndStorage = [
@@ -109,17 +115,45 @@ export default defineConfig(
         "error",
         {
           paths: nodeBuiltins.paths,
-          patterns: [
-            ...nodeBuiltins.patterns,
-            ...serverAndStorage,
+          patterns: [...nodeBuiltins.patterns, ...serverAndStorage, noDrivers],
+        },
+      ],
+      "no-restricted-globals": ["error", nodeGlobals],
+    },
+  },
+  // The web app's files outside src/ (the Vite and Vitest config, code
+  // generation, and their tests) run in Node, not the browser.
+  {
+    files: ["apps/web/*.ts", "apps/web/scripts/**"],
+    languageOptions: { globals: globals.node },
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { patterns: [...serverAndStorage, noDrivers] },
+      ],
+      "no-restricted-globals": "off",
+    },
+  },
+  {
+    files: ["apps/web/src/**"],
+    ...reactHooks.configs.flat.recommended,
+  },
+  {
+    files: ["apps/web/src/**"],
+    rules: {
+      // TanStack Router's guards redirect by throwing its redirect().
+      "@typescript-eslint/only-throw-error": [
+        "error",
+        {
+          allow: [
             {
-              group: ["@openprintstack/driver-*", "@openprintstack/driver-*/*"],
-              message: "The web app talks to printers through the API only.",
+              from: "package",
+              package: "@tanstack/router-core",
+              name: "Redirect",
             },
           ],
         },
       ],
-      "no-restricted-globals": ["error", nodeGlobals],
     },
   },
   {

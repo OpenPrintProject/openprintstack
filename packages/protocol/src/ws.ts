@@ -34,6 +34,28 @@ export const Topic = z
 
 export type Topic = z.infer<typeof Topic>;
 
+/**
+ * Identifies a subscription: two topics with the same key are one, for the
+ * server's hub and the web app's reference counts alike. The events topic's
+ * filters are compared by meaning, so the order and repeats of `types` don't
+ * matter, an empty `types` is no filter, and a missing `includeTelemetry` is
+ * false.
+ */
+export function topicKey(topic: Topic): string {
+  switch (topic.name) {
+    case "fleet":
+      return "fleet";
+    case "printer":
+      return `printer:${topic.printerId}`;
+    case "events":
+      return `events:${JSON.stringify([
+        topic.printerId ?? null,
+        [...new Set(topic.types ?? [])].sort(),
+        topic.includeTelemetry ?? false,
+      ])}`;
+  }
+}
+
 // Client → server
 
 export const WsClientMessage = z
