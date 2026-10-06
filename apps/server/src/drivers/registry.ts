@@ -8,6 +8,15 @@ import { z } from "zod";
 // is the only server file that may import a driver package; everything else
 // talks to the driver interface.
 
+/**
+ * The simulated printer's fault extension. The /simulator routes use its
+ * params schemas, so the bounds (e.g. 1–3600 s offline) live in one place.
+ */
+export {
+  SIMULATOR_EXTENSION,
+  SimulatorParams,
+} from "@openprintstack/driver-simulated";
+
 /** Where one driver type's module comes from. */
 export type DriverSource = {
   /**

@@ -47,6 +47,40 @@ export class SessionsRepo {
   }
 
   /**
+   * Slides the session's expiry: it was last seen `now` and now expires at
+   * `expiresAt`. Returns whether there was such a session.
+   */
+  touch(id: string, input: { now: number; expiresAt: number }): boolean {
+    return (
+      this.#db
+        .update(sessions)
+        .set({ lastSeenAt: input.now, expiresAt: input.expiresAt })
+        .where(eq(sessions.id, id))
+        .run().changes > 0
+    );
+  }
+
+  /** Deletes the session. Returns whether there was one. */
+  delete(id: string): boolean {
+    return (
+      this.#db.delete(sessions).where(eq(sessions.id, id)).run().changes > 0
+    );
+  }
+
+  /**
+   * Deletes every session of the user and returns their ids. Uses
+   * `sessions_user_id_idx`.
+   */
+  deleteForUser(userId: string): string[] {
+    return this.#db
+      .delete(sessions)
+      .where(eq(sessions.userId, userId))
+      .returning({ id: sessions.id })
+      .all()
+      .map((row) => row.id);
+  }
+
+  /**
    * Deletes every session that has expired by `now` (`expires_at <= now`) and
    * returns how many it deleted. Uses `sessions_expires_at_idx`.
    */

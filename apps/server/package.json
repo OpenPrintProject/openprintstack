@@ -7,15 +7,19 @@
   "scripts": {
     "db:drift": "bash scripts/check-migrations.sh",
     "db:generate": "drizzle-kit generate",
+    "openapi:emit": "node scripts/emit-openapi.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.3",
+    "@hono/zod-openapi": "^1.6.3",
     "@openprintstack/driver-sdk": "workspace:*",
     "@openprintstack/driver-simulated": "workspace:*",
     "@openprintstack/protocol": "workspace:*",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.3",
     "env-paths": "^4.0.0",
+    "hono": "^4.13.13",
     "pino": "^10.4.0",
     "zod": "catalog:"
   },

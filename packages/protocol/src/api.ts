@@ -3,6 +3,8 @@
 
 import { z } from "zod";
 
+import { JsonValue } from "./common.ts";
+
 /** The body of every REST error response. */
 export const ApiError = z
   .object({
@@ -10,7 +12,7 @@ export const ApiError = z
       code: z.string().min(1),
       message: z.string(),
       /** Extra context, such as validation issues. */
-      details: z.json().optional(),
+      details: JsonValue.optional(),
     }),
   })
   .meta({ id: "ApiError" });

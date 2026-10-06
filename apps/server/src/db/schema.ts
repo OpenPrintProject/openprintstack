@@ -125,5 +125,10 @@ export const events = sqliteTable(
     index("events_category_ts_idx").on(t.category, t.ts),
     index("events_ts_idx").on(t.ts),
     index("events_correlation_id_idx").on(t.correlationId),
+    // For paging GET /api/events newest first (row_id is the cursor) with a
+    // filter. Without these, SQLite sorts every matching row on each page.
+    index("events_printer_id_row_id_idx").on(t.printerId, t.rowId),
+    index("events_type_row_id_idx").on(t.type, t.rowId),
+    index("events_category_row_id_idx").on(t.category, t.rowId),
   ],
 );

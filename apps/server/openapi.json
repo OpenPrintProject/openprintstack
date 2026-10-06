@@ -1,0 +1,5302 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Open Print Stack",
+    "version": "0.0.0",
+    "description": "The Open Print Stack server's REST API. Generated from the server's routes; don't edit it by hand. Errors are ApiError bodies whose code says what went wrong.",
+    "license": {
+      "name": "AGPL-3.0-or-later",
+      "identifier": "AGPL-3.0-or-later"
+    }
+  },
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "operationId": "login",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Log in",
+        "description": "Sets the ops_session cookie. After 5 failed logins from one address, each further failure makes it wait (1 s, doubling to 5 min), during which logins answer 429.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Logged in.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large (over 64 KiB of JSON) or file_too_large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported_media_type: the body must be JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "too_many_attempts: too many failed logins. Retry-After says how many seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "How many seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Log out",
+        "description": "Ends this session and clears the cookie. Answers 204 with or without a valid session.",
+        "responses": {
+          "204": {
+            "description": "Logged out."
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "operationId": "me",
+        "tags": [
+          "auth"
+        ],
+        "summary": "The logged-in user",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The logged-in user.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/setup": {
+      "post": {
+        "operationId": "setup",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Create the admin on first run, and log in",
+        "description": "Only works while no user exists. Sets the ops_session cookie. Publishes auth.setup_completed.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The admin, now logged in.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It conflicts with the current state, e.g. printer_busy, printer_offline, invalid_state, name_taken, job_active or setup_done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large (over 64 KiB of JSON) or file_too_large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported_media_type: the body must be JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/driver-types": {
+      "get": {
+        "operationId": "listDriverTypes",
+        "tags": [
+          "printers"
+        ],
+        "summary": "The driver types printers can be added with",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Each driver type, with its settings form.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "driverTypes": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DriverType"
+                      }
+                    }
+                  },
+                  "required": [
+                    "driverTypes"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events": {
+      "get": {
+        "operationId": "listEvents",
+        "tags": [
+          "events"
+        ],
+        "summary": "The event log, newest first",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "printerId",
+            "in": "query",
+            "required": false,
+            "description": "Only this printer's events.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "Only these types. Repeat it for several.",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EventType"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EventType"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "description": "Only these categories. Repeat it for several.",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EventCategory"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EventCategory"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "includeTelemetry",
+            "in": "query",
+            "required": false,
+            "description": "Telemetry is left out unless this is true, or type or category names it.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "The previous page's nextCursor.",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "At most this many events (default 100).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/printers": {
+      "get": {
+        "operationId": "listPrinters",
+        "tags": [
+          "printers"
+        ],
+        "summary": "Every printer's live snapshot",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every printer, by name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "printers": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PrinterSnapshot"
+                      }
+                    }
+                  },
+                  "required": [
+                    "printers"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "addPrinter",
+        "tags": [
+          "printers"
+        ],
+        "summary": "Add a printer",
+        "description": "Settings left out take their defaults. Starts the driver and answers after its first connect attempt. Publishes printer.added.",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewPrinterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new printer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrinterConfig"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It conflicts with the current state, e.g. printer_busy, printer_offline, invalid_state, name_taken, job_active or setup_done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large (over 64 KiB of JSON) or file_too_large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported_media_type: the body must be JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The printer can't or won't do it: unsupported, unsafe, printer_rejected, unknown_driver_type or invalid_settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/printers/{id}": {
+      "get": {
+        "operationId": "getPrinter",
+        "tags": [
+          "printers"
+        ],
+        "summary": "A printer's live snapshot",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The printer's id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The printer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrinterSnapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found: not_found, printer_not_found or file_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updatePrinter",
+        "tags": [
+          "printers"
+        ],
+        "summary": "Rename a printer and/or change its settings",
+        "description": "A rename applies at once. Changed settings restart the driver, answering after its first connect attempt. Publishes printer.updated when anything changed.",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The printer's id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrinterUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The printer's config.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrinterConfig"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found: not_found, printer_not_found or file_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It conflicts with the current state, e.g. printer_busy, printer_offline, invalid_state, name_taken, job_active or setup_done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large (over 64 KiB of JSON) or file_too_large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported_media_type: the body must be JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The printer can't or won't do it: unsupported, unsafe, printer_rejected, unknown_driver_type or invalid_settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deletePrinter",
+        "tags": [
+          "printers"
+        ],
+        "summary": "Delete a printer",
+        "description": "Stops its driver and deletes its files on the server; allowed during a job. Its events are kept. Publishes printer.removed.",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The printer's id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found: not_found, printer_not_found or file_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/printers/{id}/cameras": {
+      "get": {
+        "operationId": "listCameras",
+        "tags": [
+          "cameras"
+        ],
+        "summary": "A printer's cameras",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The printer's id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The printer's cameras.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cameras": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Camera"
+                      }
+                    }
+                  },
+                  "required": [
+                    "cameras"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found: not_found, printer_not_found or file_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It conflicts with the current state, e.g. printer_busy, printer_offline, invalid_state, name_taken, job_active or setup_done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The printer can't or won't do it: unsupported, unsafe, printer_rejected, unknown_driver_type or invalid_settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "timeout: the printer didn't answer in time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/printers/{id}/cameras/{cameraId}/snapshot": {
+      "get": {
+        "operationId": "getSnapshot",
+        "tags": [
+          "cameras"
+        ],
+        "summary": "A snapshot from a camera",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The printer's id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "cameraId",
+            "in": "path",
+            "required": true,
+            "description": "The camera's id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The image, with the Content-Type the driver gave. Never cached.",
+            "content": {
+              "image/*": {
+                "schema": {
+                  "type": "string",
+                  "contentMediaType": "image/*"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found: not_found, printer_not_found or file_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It conflicts with the current state, e.g. printer_busy, printer_offline, invalid_state, name_taken, job_active or setup_done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The printer can't or won't do it: unsupported, unsafe, printer_rejected, unknown_driver_type or invalid_settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "timeout: the printer didn't answer in time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/printers/{id}/commands": {
+      "post": {
+        "operationId": "runCommand",
+        "tags": [
+          "commands"
+        ],
+        "summary": "Run a command",
+        "description": "Answers once the printer has done it, or refused. Publishes command.requested and command.result. One command at a time per printer: another gets 409 printer_busy straight away.",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The printer's id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The command succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found: not_found, printer_not_found or file_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It conflicts with the current state, e.g. printer_busy, printer_offline, invalid_state, name_taken, job_active or setup_done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large (over 64 KiB of JSON) or file_too_large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported_media_type: the body must be JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The printer can't or won't do it: unsupported, unsafe, printer_rejected, unknown_driver_type or invalid_settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "timeout: the printer didn't answer in time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/printers/{id}/config": {
+      "get": {
+        "operationId": "getPrinterConfig",
+        "tags": [
+          "printers"
+        ],
+        "summary": "A printer's stored config, settings included",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The printer's id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The printer's config.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrinterConfig"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found: not_found, printer_not_found or file_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/printers/{id}/files": {
+      "get": {
+        "operationId": "listFiles",
+        "tags": [
+          "files"
+        ],
+        "summary": "The files on a printer",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The printer's id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The printer's files, as its driver lists them.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "files": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PrinterFile"
+                      }
+                    }
+                  },
+                  "required": [
+                    "files"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found: not_found, printer_not_found or file_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It conflicts with the current state, e.g. printer_busy, printer_offline, invalid_state, name_taken, job_active or setup_done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The printer can't or won't do it: unsupported, unsafe, printer_rejected, unknown_driver_type or invalid_settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "timeout: the printer didn't answer in time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/printers/{id}/files/{fileName}": {
+      "put": {
+        "operationId": "uploadFile",
+        "tags": [
+          "files"
+        ],
+        "summary": "Upload a file to a printer",
+        "description": "The body is the file itself, with a Content-Length (chunked uploads get 411). The printer's file types, state and size limit are checked before the body is read. A file of the same name is replaced. Publishes command.requested and command.result for the file.upload command.",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The printer's id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "fileName",
+            "in": "path",
+            "required": true,
+            "description": "The file's name on the printer: 1–255 bytes in UTF-8, with no /, \\ or control characters, and not . or ... Percent-encode it in the path.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The printer has the file.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found: not_found, printer_not_found or file_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It conflicts with the current state, e.g. printer_busy, printer_offline, invalid_state, name_taken, job_active or setup_done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "411": {
+            "description": "length_required: the upload has no Content-Length.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large (over 64 KiB of JSON) or file_too_large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The printer can't or won't do it: unsupported, unsafe, printer_rejected, unknown_driver_type or invalid_settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "timeout: the printer didn't answer in time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/printers/{id}/simulator/clear": {
+      "post": {
+        "tags": [
+          "simulator"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "operationId": "simulateClear",
+        "summary": "Clear the simulated printer's error and disconnect",
+        "description": "Ends an error (failing a frozen job) and any simulated disconnect. Works while offline. No body, or null or {}.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The printer's id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The simulator did it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found: not_found, printer_not_found or file_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It conflicts with the current state, e.g. printer_busy, printer_offline, invalid_state, name_taken, job_active or setup_done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large (over 64 KiB of JSON) or file_too_large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported_media_type: the body must be JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The printer can't or won't do it: unsupported, unsafe, printer_rejected, unknown_driver_type or invalid_settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "timeout: the printer didn't answer in time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/printers/{id}/simulator/faults/disconnect": {
+      "post": {
+        "tags": [
+          "simulator"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "operationId": "simulateDisconnect",
+        "summary": "Make the simulated printer unreachable for a while",
+        "description": "It goes offline for durationS real seconds (1–3600), then reconnects by itself.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The printer's id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulatorDisconnectParams"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The simulator did it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found: not_found, printer_not_found or file_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It conflicts with the current state, e.g. printer_busy, printer_offline, invalid_state, name_taken, job_active or setup_done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large (over 64 KiB of JSON) or file_too_large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported_media_type: the body must be JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The printer can't or won't do it: unsupported, unsafe, printer_rejected, unknown_driver_type or invalid_settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "timeout: the printer didn't answer in time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/printers/{id}/simulator/faults/error": {
+      "post": {
+        "tags": [
+          "simulator"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "operationId": "simulateError",
+        "summary": "Put the simulated printer in error",
+        "description": "A running job freezes until clear. The body is optional: null, {} or { message }.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The printer's id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulatorErrorParams"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The simulator did it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found: not_found, printer_not_found or file_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It conflicts with the current state, e.g. printer_busy, printer_offline, invalid_state, name_taken, job_active or setup_done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large (over 64 KiB of JSON) or file_too_large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported_media_type: the body must be JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The printer can't or won't do it: unsupported, unsafe, printer_rejected, unknown_driver_type or invalid_settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "timeout: the printer didn't answer in time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/printers/{id}/simulator/faults/filament-runout": {
+      "post": {
+        "tags": [
+          "simulator"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "operationId": "simulateFilamentRunout",
+        "summary": "Run the simulated printer out of filament",
+        "description": "Pauses a running print and raises a filament_runout alert. No body, or null or {}.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The printer's id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The simulator did it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found: not_found, printer_not_found or file_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It conflicts with the current state, e.g. printer_busy, printer_offline, invalid_state, name_taken, job_active or setup_done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large (over 64 KiB of JSON) or file_too_large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported_media_type: the body must be JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The printer can't or won't do it: unsupported, unsafe, printer_rejected, unknown_driver_type or invalid_settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "timeout: the printer didn't answer in time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/printers/{id}/simulator/speed": {
+      "post": {
+        "tags": [
+          "simulator"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "operationId": "simulateSpeed",
+        "summary": "Change the simulation speed",
+        "description": "Until the driver restarts. The multiplier is 0.1–1000; the speedMultiplier setting is what survives a restart.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The printer's id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulatorSpeedParams"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The simulator did it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request isn't valid: validation_failed, invalid_json or upload_incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not logged in: unauthenticated, or setup_required while no user exists. On login, invalid_credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The Host or Origin header isn't allowed: host_not_allowed or origin_not_allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found: not_found, printer_not_found or file_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It conflicts with the current state, e.g. printer_busy, printer_offline, invalid_state, name_taken, job_active or setup_done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large (over 64 KiB of JSON) or file_too_large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported_media_type: the body must be JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The printer can't or won't do it: unsupported, unsafe, printer_rejected, unknown_driver_type or invalid_settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal: the server or the driver failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "timeout: the printer didn't answer in time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AlertSeverity": {
+        "type": "string",
+        "enum": [
+          "info",
+          "warning",
+          "error"
+        ]
+      },
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "minLength": 1
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {
+                "$ref": "#/components/schemas/JsonValue"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "AuthLoginFailedEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "null"
+          },
+          "type": {
+            "type": "string",
+            "const": "auth.login_failed"
+          },
+          "category": {
+            "type": "string",
+            "const": "auth"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "username": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "username"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "AuthLoginSucceededEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "null"
+          },
+          "type": {
+            "type": "string",
+            "const": "auth.login_succeeded"
+          },
+          "category": {
+            "type": "string",
+            "const": "auth"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "AuthLogoutEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "null"
+          },
+          "type": {
+            "type": "string",
+            "const": "auth.logout"
+          },
+          "category": {
+            "type": "string",
+            "const": "auth"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "AuthSetupCompletedEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "null"
+          },
+          "type": {
+            "type": "string",
+            "const": "auth.setup_completed"
+          },
+          "category": {
+            "type": "string",
+            "const": "auth"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "Axis": {
+        "type": "string",
+        "enum": [
+          "x",
+          "y",
+          "z"
+        ]
+      },
+      "BuildVolume": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "object",
+            "properties": {
+              "minMm": {
+                "type": "number"
+              },
+              "maxMm": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "minMm",
+              "maxMm"
+            ]
+          },
+          "y": {
+            "type": "object",
+            "properties": {
+              "minMm": {
+                "type": "number"
+              },
+              "maxMm": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "minMm",
+              "maxMm"
+            ]
+          },
+          "z": {
+            "type": "object",
+            "properties": {
+              "minMm": {
+                "type": "number"
+              },
+              "maxMm": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "minMm",
+              "maxMm"
+            ]
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "z"
+        ]
+      },
+      "Camera": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ]
+      },
+      "CameraCapabilities": {
+        "type": "object",
+        "properties": {
+          "snapshot": {
+            "type": "boolean"
+          },
+          "stream": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "snapshot",
+          "stream"
+        ]
+      },
+      "Capabilities": {
+        "type": "object",
+        "properties": {
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommandKind"
+            }
+          },
+          "heaters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Heater"
+            }
+          },
+          "fans": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Fan"
+            }
+          },
+          "axes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuildVolume"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxMoveSpeedMmS": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "files": {
+            "$ref": "#/components/schemas/FileCapabilities"
+          },
+          "cameras": {
+            "$ref": "#/components/schemas/CameraCapabilities"
+          },
+          "extensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "commands",
+          "heaters",
+          "fans",
+          "axes",
+          "maxMoveSpeedMmS",
+          "files",
+          "cameras",
+          "extensions"
+        ]
+      },
+      "CommandKind": {
+        "type": "string",
+        "enum": [
+          "print.start",
+          "print.pause",
+          "print.resume",
+          "print.cancel",
+          "motion.home",
+          "motion.move",
+          "temperature.set",
+          "fan.set",
+          "file.upload",
+          "extension.invoke"
+        ]
+      },
+      "CommandRequestedEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "command.requested"
+          },
+          "category": {
+            "type": "string",
+            "const": "command"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "commandId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "command": {
+                "$ref": "#/components/schemas/PrinterCommand"
+              }
+            },
+            "required": [
+              "commandId",
+              "command"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "CommandResult": {
+        "type": "object",
+        "properties": {
+          "commandId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "durationMs": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "commandId",
+          "ok",
+          "durationMs"
+        ],
+        "description": "The command succeeded. A refused or failed command answers with an ApiError instead, whose details are { commandId, durationMs } once the command has been requested."
+      },
+      "CommandResultEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "command.result"
+          },
+          "category": {
+            "type": "string",
+            "const": "command"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "commandId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "error": {
+                "$ref": "#/components/schemas/ErrorInfo"
+              },
+              "durationMs": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "commandId",
+              "ok",
+              "durationMs"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "DriverType": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "settingsSchema": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "description": "The settings' JSON Schema (draft 2020-12), describing the input: fields with a default are optional and carry it."
+          },
+          "defaults": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "description": "The default of each settings field that has one."
+          }
+        },
+        "required": [
+          "type",
+          "name",
+          "description",
+          "settingsSchema",
+          "defaults"
+        ]
+      },
+      "ErrorInfo": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "EventCategory": {
+        "type": "string",
+        "enum": [
+          "telemetry",
+          "state",
+          "command",
+          "config",
+          "auth",
+          "system"
+        ]
+      },
+      "EventPage": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpsEvent"
+            },
+            "description": "Newest first."
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The `before` for the next, older page; null when there's nothing older."
+          },
+          "users": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1
+            },
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The username of each user these events name, by id. A deleted user isn't here."
+          }
+        },
+        "required": [
+          "events",
+          "nextCursor",
+          "users"
+        ]
+      },
+      "EventSource": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "driver"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "user"
+              },
+              "userId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "kind",
+              "userId"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "system"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
+      "EventType": {
+        "type": "string",
+        "enum": [
+          "printer.telemetry",
+          "printer.status_changed",
+          "printer.capabilities_changed",
+          "printer.alert",
+          "printer.job_started",
+          "printer.job_ended",
+          "printer.files_changed",
+          "command.requested",
+          "command.result",
+          "printer.added",
+          "printer.updated",
+          "printer.removed",
+          "auth.setup_completed",
+          "auth.login_succeeded",
+          "auth.login_failed",
+          "auth.logout",
+          "system.started",
+          "system.stopping"
+        ]
+      },
+      "ExtensionInvokeCommand": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "extension.invoke"
+          },
+          "extension": {
+            "type": "string",
+            "minLength": 1
+          },
+          "action": {
+            "type": "string",
+            "minLength": 1
+          },
+          "params": {
+            "$ref": "#/components/schemas/JsonValue"
+          }
+        },
+        "required": [
+          "kind",
+          "extension",
+          "action",
+          "params"
+        ]
+      },
+      "Fan": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FanKind"
+          },
+          "label": {
+            "type": "string"
+          },
+          "controllable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "controllable"
+        ]
+      },
+      "FanKind": {
+        "type": "string",
+        "enum": [
+          "part",
+          "auxiliary",
+          "chamber",
+          "other"
+        ]
+      },
+      "FanReading": {
+        "type": "object",
+        "properties": {
+          "percent": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "percent"
+        ]
+      },
+      "FanSetCommand": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "fan.set"
+          },
+          "fanId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "percent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "kind",
+          "fanId",
+          "percent"
+        ]
+      },
+      "FileCapabilities": {
+        "type": "object",
+        "properties": {
+          "list": {
+            "type": "boolean"
+          },
+          "upload": {
+            "type": "boolean"
+          },
+          "acceptedExtensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxUploadBytes": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "list",
+          "upload",
+          "acceptedExtensions",
+          "maxUploadBytes"
+        ]
+      },
+      "FileUploadCommand": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "file.upload"
+          },
+          "stagedFileId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "fileName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "kind",
+          "stagedFileId",
+          "fileName",
+          "sizeBytes"
+        ]
+      },
+      "Heater": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "$ref": "#/components/schemas/HeaterKind"
+          },
+          "label": {
+            "type": "string"
+          },
+          "maxC": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "maxC"
+        ]
+      },
+      "HeaterKind": {
+        "type": "string",
+        "enum": [
+          "nozzle",
+          "bed",
+          "chamber"
+        ]
+      },
+      "JobOutcome": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "cancelled",
+          "failed"
+        ]
+      },
+      "JobProgress": {
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string"
+          },
+          "progressPercent": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "elapsedS": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "remainingS": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "currentLayer": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "totalLayers": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "fileName",
+          "progressPercent",
+          "elapsedS",
+          "remainingS",
+          "currentLayer",
+          "totalLayers"
+        ]
+      },
+      "JsonValue": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JsonValue"
+            }
+          },
+          {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            }
+          }
+        ]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "MotionHomeCommand": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "motion.home"
+          },
+          "axes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Axis"
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "axes"
+        ]
+      },
+      "MotionMoveCommand": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "motion.move"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number"
+          },
+          "speedMmS": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "NewPrinterRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "1–64 characters after trimming, with no control characters. Unique, ignoring the case of A–Z."
+          },
+          "driverType": {
+            "type": "string",
+            "minLength": 1
+          },
+          "settings": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "description": "Settings fields, checked against the driver type's settings schema."
+          }
+        },
+        "required": [
+          "name",
+          "driverType"
+        ]
+      },
+      "OpsEvent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PrinterTelemetryEvent"
+          },
+          {
+            "$ref": "#/components/schemas/PrinterStatusChangedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/PrinterCapabilitiesChangedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/PrinterAlertEvent"
+          },
+          {
+            "$ref": "#/components/schemas/PrinterJobStartedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/PrinterJobEndedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/PrinterFilesChangedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CommandRequestedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CommandResultEvent"
+          },
+          {
+            "$ref": "#/components/schemas/PrinterAddedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/PrinterUpdatedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/PrinterRemovedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/AuthSetupCompletedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/AuthLoginSucceededEvent"
+          },
+          {
+            "$ref": "#/components/schemas/AuthLoginFailedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/AuthLogoutEvent"
+          },
+          {
+            "$ref": "#/components/schemas/SystemStartedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/SystemStoppingEvent"
+          }
+        ]
+      },
+      "Position": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "z"
+        ]
+      },
+      "PrintCancelCommand": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "print.cancel"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "PrintPauseCommand": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "print.pause"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "PrintResumeCommand": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "print.resume"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "PrintStartCommand": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "print.start"
+          },
+          "fileName": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "kind",
+          "fileName"
+        ]
+      },
+      "PrinterAddedEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "printer.added"
+          },
+          "category": {
+            "type": "string",
+            "const": "config"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "driverType": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "name",
+              "driverType"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "PrinterAlertEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "printer.alert"
+          },
+          "category": {
+            "type": "string",
+            "const": "state"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "severity": {
+                "$ref": "#/components/schemas/AlertSeverity"
+              },
+              "code": {
+                "type": "string",
+                "minLength": 1
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "severity",
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "PrinterCapabilitiesChangedEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "printer.capabilities_changed"
+          },
+          "category": {
+            "type": "string",
+            "const": "state"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "capabilities": {
+                "$ref": "#/components/schemas/Capabilities"
+              }
+            },
+            "required": [
+              "capabilities"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "PrinterCommand": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PrintStartCommand"
+          },
+          {
+            "$ref": "#/components/schemas/PrintPauseCommand"
+          },
+          {
+            "$ref": "#/components/schemas/PrintResumeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/PrintCancelCommand"
+          },
+          {
+            "$ref": "#/components/schemas/MotionHomeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/MotionMoveCommand"
+          },
+          {
+            "$ref": "#/components/schemas/TemperatureSetCommand"
+          },
+          {
+            "$ref": "#/components/schemas/FanSetCommand"
+          },
+          {
+            "$ref": "#/components/schemas/FileUploadCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ExtensionInvokeCommand"
+          }
+        ]
+      },
+      "PrinterConfig": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "driverType": {
+            "type": "string"
+          },
+          "settings": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": [
+                "string",
+                "number",
+                "boolean"
+              ]
+            }
+          },
+          "settingsVersion": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "driverType",
+          "settings",
+          "settingsVersion",
+          "createdAt",
+          "updatedAt"
+        ],
+        "description": "A printer's stored config. Settings are stored with every default filled in."
+      },
+      "PrinterFile": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sizeBytes": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "modifiedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "sizeBytes",
+          "modifiedAt"
+        ]
+      },
+      "PrinterFilesChangedEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "printer.files_changed"
+          },
+          "category": {
+            "type": "string",
+            "const": "state"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "PrinterInfo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "driverType": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "driverType"
+        ]
+      },
+      "PrinterJobEndedEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "printer.job_ended"
+          },
+          "category": {
+            "type": "string",
+            "const": "state"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "$ref": "#/components/schemas/JobOutcome"
+              },
+              "fileName": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "outcome",
+              "fileName"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "PrinterJobStartedEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "printer.job_started"
+          },
+          "category": {
+            "type": "string",
+            "const": "state"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "fileName": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "fileName"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "PrinterRemovedEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "printer.removed"
+          },
+          "category": {
+            "type": "string",
+            "const": "config"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "PrinterSnapshot": {
+        "type": "object",
+        "properties": {
+          "printer": {
+            "$ref": "#/components/schemas/PrinterInfo"
+          },
+          "state": {
+            "$ref": "#/components/schemas/PrinterState"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "printer",
+          "state",
+          "seq"
+        ]
+      },
+      "PrinterState": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/PrinterStatus"
+          },
+          "statusDetail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "telemetry": {
+            "$ref": "#/components/schemas/Telemetry"
+          },
+          "capabilities": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Capabilities"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "status",
+          "statusDetail",
+          "error",
+          "telemetry",
+          "capabilities",
+          "updatedAt"
+        ]
+      },
+      "PrinterStatus": {
+        "type": "string",
+        "enum": [
+          "connecting",
+          "offline",
+          "idle",
+          "busy",
+          "preparing",
+          "printing",
+          "pausing",
+          "paused",
+          "cancelling",
+          "error"
+        ]
+      },
+      "PrinterStatusChangedEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "printer.status_changed"
+          },
+          "category": {
+            "type": "string",
+            "const": "state"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "previous": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PrinterStatus"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "status": {
+                "$ref": "#/components/schemas/PrinterStatus"
+              },
+              "detail": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "error": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ErrorInfo"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "previous",
+              "status",
+              "detail",
+              "error"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "PrinterTelemetryEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "printer.telemetry"
+          },
+          "category": {
+            "type": "string",
+            "const": "telemetry"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "telemetry": {
+                "$ref": "#/components/schemas/Telemetry"
+              }
+            },
+            "required": [
+              "telemetry"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "PrinterUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "1–64 characters after trimming, with no control characters. Unique, ignoring the case of A–Z."
+          },
+          "settings": {
+            "description": "Fields to change; the rest keep their stored values. Changing settings restarts the driver, and is refused (409 job_active) while a job is active.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            }
+          }
+        }
+      },
+      "PrinterUpdatedEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "printer.updated"
+          },
+          "category": {
+            "type": "string",
+            "const": "config"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "changedFields": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "name",
+                    "settings"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "changedFields"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "SessionUser": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "username"
+        ]
+      },
+      "SetupRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,32}$",
+            "description": "1–32 ASCII letters, digits, dots, underscores or hyphens, after trimming. Matched ignoring case."
+          },
+          "password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 1024,
+            "description": "12–1024 characters (Unicode code points), counted after NFKC normalisation. Spaces count and nothing is trimmed."
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "SimulatorDisconnectParams": {
+        "type": "object",
+        "properties": {
+          "durationS": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 3600
+          }
+        },
+        "required": [
+          "durationS"
+        ],
+        "additionalProperties": false
+      },
+      "SimulatorErrorParams": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "SimulatorSpeedParams": {
+        "type": "object",
+        "properties": {
+          "multiplier": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 1000
+          }
+        },
+        "required": [
+          "multiplier"
+        ],
+        "additionalProperties": false
+      },
+      "SystemStartedEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "null"
+          },
+          "type": {
+            "type": "string",
+            "const": "system.started"
+          },
+          "category": {
+            "type": "string",
+            "const": "system"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "version"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "SystemStoppingEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "null"
+          },
+          "type": {
+            "type": "string",
+            "const": "system.stopping"
+          },
+          "category": {
+            "type": "string",
+            "const": "system"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
+      "Telemetry": {
+        "type": "object",
+        "properties": {
+          "temperatures": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TemperatureReading"
+            }
+          },
+          "fans": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FanReading"
+            }
+          },
+          "speedPercent": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "position": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Position"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "homedAxes": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Axis"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "temperatures",
+          "fans",
+          "speedPercent",
+          "position",
+          "homedAxes",
+          "job"
+        ]
+      },
+      "TemperatureReading": {
+        "type": "object",
+        "properties": {
+          "actualC": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "targetC": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "actualC",
+          "targetC"
+        ]
+      },
+      "TemperatureSetCommand": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "temperature.set"
+          },
+          "heaterId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "targetC": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "kind",
+          "heaterId",
+          "targetC"
+        ]
+      },
+      "UserCommand": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PrintStartCommand"
+          },
+          {
+            "$ref": "#/components/schemas/PrintPauseCommand"
+          },
+          {
+            "$ref": "#/components/schemas/PrintResumeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/PrintCancelCommand"
+          },
+          {
+            "$ref": "#/components/schemas/MotionHomeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/MotionMoveCommand"
+          },
+          {
+            "$ref": "#/components/schemas/TemperatureSetCommand"
+          },
+          {
+            "$ref": "#/components/schemas/FanSetCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ExtensionInvokeCommand"
+          }
+        ],
+        "description": "Any command except file.upload, which only uploads create."
+      },
+      "UserResponse": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/SessionUser"
+          }
+        },
+        "required": [
+          "user"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "ops_session",
+        "description": "The session cookie that setup and login set: HttpOnly, SameSite=Lax, 7 days from the last request."
+      }
+    }
+  }
+}

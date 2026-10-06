@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Open Print Stack contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import { isIPv6 } from "node:net";
 import path from "node:path";
 
 import envPaths from "env-paths";
@@ -30,6 +31,12 @@ export type Config = {
   readonly env: RuntimeEnv;
   readonly host: string;
   readonly port: number;
+  /**
+   * Host names the server answers to besides localhost, 127.0.0.1, [::1] and
+   * `host`, normalised as `URL.hostname` gives them (lowercase, IPv6 in
+   * brackets). Requests with any other Host header are refused.
+   */
+  readonly allowedHosts: readonly string[];
   /** An absolute path. */
   readonly dataDir: string;
   readonly logLevel: LogLevel;
@@ -49,6 +56,54 @@ export function defaultDataDir(): string {
   return envPaths("open-print-stack", { suffix: "" }).data;
 }
 
+/**
+ * A host name or IP address as `URL.hostname` gives it: lowercase, IPv6 in
+ * brackets. Undefined if `value` isn't a bare host (a port, path, scheme or
+ * user makes it undefined too).
+ */
+export function normalizeHostName(value: string): string | undefined {
+  const host = isIPv6(value) ? `[${value}]` : value;
+  let url: URL;
+  try {
+    url = new URL(`http://${host}/`);
+  } catch {
+    return undefined;
+  }
+  const bare =
+    url.port === "" &&
+    url.username === "" &&
+    url.password === "" &&
+    url.pathname === "/" &&
+    url.search === "" &&
+    url.hash === "" &&
+    url.host === url.hostname &&
+    // e.g. "a/b" parses, with the path /b.
+    !/[/?#@\\\s]/.test(value) &&
+    // DNS names (after punycode) and IP addresses only; URL also takes "*".
+    /^(?:[a-z0-9_-]+(?:\.[a-z0-9_-]+)*\.?|\[[0-9a-f:.]+\])$/.test(url.hostname);
+  return bare ? url.hostname : undefined;
+}
+
+const hostList = z.string().transform((value, ctx) => {
+  const hosts: string[] = [];
+  for (const item of value.split(",")) {
+    const entry = item.trim();
+    if (entry === "") continue;
+    const host = normalizeHostName(entry);
+    if (host === undefined) {
+      ctx.issues.push({
+        code: "custom",
+        message:
+          "must be a comma-separated list of host names without ports, such as printers.local,192.168.1.20",
+        input: value,
+      });
+      return z.NEVER;
+    }
+    hosts.push(host);
+  }
+  return [...new Set(hosts)];
+});
+
 /** Digits only, so " 7337", "7e3", "0x1CA9" and "7337.5" are refused. */
 function wholeNumber(min: number, max: number) {
   const error = `must be a whole number from ${min} to ${max}`;
@@ -66,6 +121,7 @@ const variables = {
     .regex(/^\S+$/, { error: "must not contain spaces" })
     .default("127.0.0.1"),
   OPS_PORT: wholeNumber(1, 65_535).default(7337),
+  OPS_ALLOWED_HOSTS: hostList.optional(),
   OPS_DATA_DIR: z
     .string()
     .refine((value) => !value.startsWith("~"), {
@@ -160,6 +216,7 @@ export function loadConfig(
     env: vars.OPS_ENV,
     host: vars.OPS_HOST,
     port: vars.OPS_PORT,
+    allowedHosts: Object.freeze(vars.OPS_ALLOWED_HOSTS ?? []),
     dataDir: path.resolve(
       options.cwd ?? process.cwd(),
       vars.OPS_DATA_DIR ?? defaultDataDir(),

@@ -107,4 +107,76 @@ describe("SessionsRepo", () => {
     expect(repos.sessions.findById("c")).toBeDefined();
     expect(repos.sessions.deleteExpired(1000)).toBe(0);
   });
+
+  it("slides a session's expiry, leaving the rest of it alone", async () => {
+    const { repos, userId } = await setup();
+    const session = repos.sessions.create({
+      id: SESSION_ID,
+      userId,
+      now: 1000,
+      expiresAt: 5000,
+      ip: "127.0.0.1",
+      userAgent: "Safari",
+    });
+
+    expect(
+      repos.sessions.touch(SESSION_ID, { now: 3000, expiresAt: 9000 }),
+    ).toBe(true);
+
+    expect(repos.sessions.findById(SESSION_ID)).toEqual({
+      ...session,
+      lastSeenAt: 3000,
+      expiresAt: 9000,
+    });
+    expect(repos.sessions.touch("other", { now: 3000, expiresAt: 9000 })).toBe(
+      false,
+    );
+  });
+
+  it("deletes one session, and says whether there was one", async () => {
+    const { repos, userId } = await setup();
+    const add = (id: string) =>
+      repos.sessions.create({
+        id,
+        userId,
+        now: 0,
+        expiresAt: 10,
+        ip: null,
+        userAgent: null,
+      });
+    add("a");
+    add("b");
+
+    expect(repos.sessions.delete("a")).toBe(true);
+    expect(repos.sessions.delete("a")).toBe(false);
+
+    expect(repos.sessions.findById("a")).toBeUndefined();
+    expect(repos.sessions.findById("b")).toBeDefined();
+  });
+
+  it("deletes every session of one user and returns their ids", async () => {
+    const { repos, userId } = await setup();
+    const other = repos.users.create({
+      username: "sam",
+      passwordHash: "h",
+      now: 1,
+    });
+    const add = (id: string, owner: string) =>
+      repos.sessions.create({
+        id,
+        userId: owner,
+        now: 0,
+        expiresAt: 10,
+        ip: null,
+        userAgent: null,
+      });
+    add("a", userId);
+    add("b", other.id);
+    add("c", userId);
+
+    expect(repos.sessions.deleteForUser(userId).sort()).toEqual(["a", "c"]);
+
+    expect(repos.sessions.findById("b")).toBeDefined();
+    expect(repos.sessions.deleteForUser(userId)).toEqual([]);
+  });
 });

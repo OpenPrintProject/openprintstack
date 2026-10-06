@@ -3,7 +3,7 @@
 
 import { z } from "zod";
 
-import { Axis, Id } from "./common.ts";
+import { Axis, Id, JsonValue } from "./common.ts";
 
 // Commands only check the bounds that follow from their units. Printer-specific
 // limits (maxC, build volume, maximum speed) belong to the server's safety check.
@@ -106,7 +106,7 @@ export const ExtensionInvokeCommand = z
     kind: z.literal("extension.invoke"),
     extension: z.string().min(1),
     action: z.string().min(1),
-    params: z.json(),
+    params: JsonValue,
   })
   .meta({ id: "ExtensionInvokeCommand" });
 
