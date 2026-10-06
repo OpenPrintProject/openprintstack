@@ -91,3 +91,12 @@ export function draftOf(event: OpsEvent): EventDraft {
     payload: event.payload,
   }) as EventDraft;
 }
+
+/**
+ * Waits one turn of the event loop, using Node's real `setImmediate` (tests
+ * that fake timers leave it real). Everything already queued on microtasks,
+ * such as messages crossing a loopback transport, is delivered by then.
+ */
+export function settle(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}

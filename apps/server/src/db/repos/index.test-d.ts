@@ -46,6 +46,11 @@ describe("repos", () => {
       Session | undefined
     >();
     expectTypeOf<PrintersRepo["create"]>().returns.toEqualTypeOf<Printer>();
+    expectTypeOf<PrintersRepo["list"]>().returns.toEqualTypeOf<Printer[]>();
+    expectTypeOf<PrintersRepo["update"]>().returns.toEqualTypeOf<
+      Printer | undefined
+    >();
+    expectTypeOf<PrintersRepo["delete"]>().returns.toEqualTypeOf<boolean>();
     expectTypeOf<EventsRepo["insertMany"]>().returns.toEqualTypeOf<void>();
   });
 

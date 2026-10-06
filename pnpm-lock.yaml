@@ -229,6 +229,12 @@ importers:
 
   apps/server:
     dependencies:
+      '@openprintstack/driver-sdk':
+        specifier: workspace:*
+        version: link:../../packages/driver-sdk
+      '@openprintstack/driver-simulated':
+        specifier: workspace:*
+        version: link:../../packages/driver-simulated
       '@openprintstack/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
