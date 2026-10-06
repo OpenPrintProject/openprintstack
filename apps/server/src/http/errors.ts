@@ -53,6 +53,7 @@ const HTTP_STATUS = {
   length_required: 411,
   payload_too_large: 413,
   unsupported_media_type: 415,
+  upgrade_required: 426,
   too_many_attempts: 429,
 } as const satisfies Record<string, ContentfulStatusCode>;
 

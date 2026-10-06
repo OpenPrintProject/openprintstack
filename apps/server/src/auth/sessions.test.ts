@@ -235,6 +235,55 @@ describe("SessionService", () => {
     );
   });
 
+  describe("isActive (for the WebSocket hub)", () => {
+    it("is true for a live session and false for an unknown one", async () => {
+      const { service, user, client } = await setup();
+      const session = service.create(user.id, client);
+
+      expect(service.isActive(session.sessionId)).toBe(true);
+      expect(service.isActive(sessionIdOf("x".repeat(43)))).toBe(false);
+    });
+
+    it("is false from exactly the expiry, without deleting or telling anyone", async () => {
+      const { repos, service, user, client, at, ended } = await setup();
+      const session = service.create(user.id, client);
+
+      at(START + SESSION_TTL_MS - 1);
+      expect(service.isActive(session.sessionId)).toBe(true);
+      at(START + SESSION_TTL_MS);
+      expect(service.isActive(session.sessionId)).toBe(false);
+
+      expect(repos.sessions.findById(session.sessionId)).toBeDefined();
+      expect(ended).toEqual([]);
+    });
+
+    it("never slides the expiry", async () => {
+      const { repos, service, user, client, at } = await setup();
+      const session = service.create(user.id, client);
+      const before = repos.sessions.findById(session.sessionId);
+
+      at(START + 2 * HOUR);
+      service.isActive(session.sessionId);
+
+      expect(repos.sessions.findById(session.sessionId)).toEqual(before);
+    });
+
+    it("is false for a deleted session, and for a disabled user's", async () => {
+      const { db, repos, service, user, client } = await setup();
+      const deleted = service.create(user.id, client);
+      const disabled = service.create(user.id, client);
+
+      repos.sessions.delete(deleted.sessionId);
+      db.$client
+        .prepare("UPDATE users SET disabled_at = 5 WHERE id = ?")
+        .run(user.id);
+
+      expect(service.isActive(deleted.sessionId)).toBe(false);
+      expect(service.isActive(disabled.sessionId)).toBe(false);
+      expect(repos.sessions.findById(disabled.sessionId)).toBeDefined();
+    });
+  });
+
   describe("end (logout)", () => {
     it("deletes the session and returns it", async () => {
       const { repos, service, user, client, ended } = await setup();

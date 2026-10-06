@@ -352,7 +352,13 @@ export const wsServerMessageFixtures: WsServerMessage[] = [
     topic: { name: "printer", printerId: PRINTER_ID },
     event: eventFixtures["printer.telemetry"],
   },
-  { type: "error", code: "unknown_printer", message: "No such printer." },
+  { type: "error", code: "invalid_message", message: "Not JSON." },
+  {
+    type: "error",
+    code: "printer_not_found",
+    message: "No such printer.",
+    topic: { name: "printer", printerId: PRINTER_ID },
+  },
   { type: "pong" },
 ];
 

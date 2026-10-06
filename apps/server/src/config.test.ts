@@ -154,7 +154,7 @@ describe("loadConfig", () => {
 
   describe("whole numbers", () => {
     const cases = [
-      { name: "OPS_PORT", min: 1, max: 65_535 },
+      { name: "OPS_PORT", min: 0, max: 65_535 },
       { name: "OPS_TELEMETRY_SAMPLE_INTERVAL_MS", min: 0, max: 3_600_000 },
       { name: "OPS_TELEMETRY_RETENTION_DAYS", min: 1, max: 3650 },
     ] as const;
@@ -190,6 +190,10 @@ describe("loadConfig", () => {
       expect(load({ OPS_PORT: "07337" }).port).toBe(7337);
     });
 
+    it("takes OPS_PORT=0 as any free port", () => {
+      expect(load({ OPS_PORT: "0" }).port).toBe(0);
+    });
+
     // z.coerce.number() would accept most of these: " 7337" and "0x1CA9" as
     // numbers, and "" as 0.
     it.each([
@@ -206,7 +210,7 @@ describe("loadConfig", () => {
       "99999999999999999999",
     ])("refuses %j with one message", (value) => {
       expect(problems({ OPS_PORT: value })).toEqual([
-        `OPS_PORT must be a whole number from 1 to 65535 (got ${JSON.stringify(value)})`,
+        `OPS_PORT must be a whole number from 0 to 65535 (got ${JSON.stringify(value)})`,
       ]);
     });
   });
@@ -291,7 +295,7 @@ describe("loadConfig", () => {
       [
         "Invalid configuration:",
         '  OPS_ENV must be development, test or production (got "prod")',
-        '  OPS_PORT must be a whole number from 1 to 65535 (got "abc")',
+        '  OPS_PORT must be a whole number from 0 to 65535 (got "abc")',
         "  OPS_PROT isn't a known setting (did you mean OPS_PORT?)",
         '  OPS_TELEMETRY_RETENTION_DAYS must be a whole number from 1 to 3650 (got "0")',
       ].join("\n"),

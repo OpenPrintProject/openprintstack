@@ -3,6 +3,7 @@
 
 import type { OpenAPIHono } from "@hono/zod-openapi";
 
+import { wsRoutes } from "../ws/route.ts";
 import type { AppDeps, AppEnv } from "./context.ts";
 import { errorHandler, notFoundHandler } from "./errors.ts";
 import { jsonBodyLimit } from "./middleware/body-limit.ts";
@@ -14,8 +15,8 @@ import { OPENAPI_PATH, openApiDocument } from "./openapi.ts";
 import { apiRoutes } from "./routes/index.ts";
 import { newRoutes } from "./validation.ts";
 
-// The HTTP app, without a socket: PR 9's main.ts serves it with
-// @hono/node-server and adds the WebSocket at /api/ws. Every request passes
+// The HTTP app, without a socket: server.ts serves it with @hono/node-server,
+// which also hands it the WebSocket upgrades at /api/ws. Every request passes
 //
 //   request log → security headers → Host check → Origin check (unsafe
 //   methods) → 64 KiB body limit (not uploads) → the route: session (most
@@ -42,5 +43,6 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
 
   app.get(OPENAPI_PATH, (c) => c.json(openApiDocument()));
   app.route("/", apiRoutes());
+  app.route("/", wsRoutes());
   return app;
 }

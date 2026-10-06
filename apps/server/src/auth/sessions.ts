@@ -136,6 +136,21 @@ export class SessionService {
   }
 
   /**
+   * Whether the session still exists, hasn't expired and belongs to a user
+   * who isn't disabled. Unlike `authenticate`, it only reads: it neither
+   * slides the expiry nor deletes anything. The WebSocket hub uses it, since
+   * the pruner deletes expired sessions without telling anyone.
+   */
+  isActive(sessionId: string): boolean {
+    const session = this.#sessions.findById(sessionId);
+    if (session === undefined || session.expiresAt <= this.#now()) {
+      return false;
+    }
+    const user = this.#users.findById(session.userId);
+    return user !== undefined && user.disabledAt === null;
+  }
+
+  /**
    * Logs out: deletes the token's session, and returns it if it was valid.
    * An expired or unknown token is deleted too, but returns undefined.
    */
