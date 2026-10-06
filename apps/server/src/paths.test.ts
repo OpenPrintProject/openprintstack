@@ -12,6 +12,7 @@ import {
   ensurePrinterDir,
   printerDir,
   removePrinterDir,
+  stagedFilePath,
 } from "./paths.ts";
 import { tempDir } from "./test-utils.ts";
 
@@ -146,6 +147,25 @@ describe("printerDir", () => {
       `Not a printer id: ${JSON.stringify(id)}`,
     );
   });
+});
+
+describe("stagedFilePath", () => {
+  const paths = dataPaths("/srv/ops");
+
+  it("is the id inside staging/", () => {
+    expect(stagedFilePath(paths, PRINTER_ID)).toBe(
+      `/srv/ops/staging/${PRINTER_ID}`,
+    );
+  });
+
+  it.each(["", "..", "../ops.sqlite", "benchy.gcode", `${PRINTER_ID}/..`])(
+    "refuses %j, which isn't a UUID",
+    (id) => {
+      expect(() => stagedFilePath(paths, id)).toThrow(
+        `Not a staged file id: ${JSON.stringify(id)}`,
+      );
+    },
+  );
 });
 
 describe("ensurePrinterDir and removePrinterDir", () => {

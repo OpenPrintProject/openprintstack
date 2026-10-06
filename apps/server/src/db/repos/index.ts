@@ -8,7 +8,7 @@ import { SessionsRepo } from "./sessions.ts";
 import { UsersRepo } from "./users.ts";
 
 export { EventsRepo, PrintersRepo, SessionsRepo, UsersRepo };
-export type { NewPrinter, Printer } from "./printers.ts";
+export type { NewPrinter, Printer, PrinterChanges } from "./printers.ts";
 export type { NewSession, Session } from "./sessions.ts";
 export type { NewUser, User } from "./users.ts";
 

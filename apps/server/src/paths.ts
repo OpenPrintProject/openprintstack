@@ -56,14 +56,14 @@ export async function ensureDataDirs(paths: DataPaths): Promise<void> {
   }
 }
 
-const PrinterId = z.uuid();
+const Uuid = z.uuid();
 
 /**
  * The folder for one printer's driver. Printer ids are UUIDs, and anything
  * else is refused, so an id like `../x` can't point outside `printers/`.
  */
 export function printerDir(paths: DataPaths, printerId: string): string {
-  if (!PrinterId.safeParse(printerId).success) {
+  if (!Uuid.safeParse(printerId).success) {
     throw new Error(`Not a printer id: ${JSON.stringify(printerId)}`);
   }
   return path.join(paths.printers, printerId);
@@ -85,6 +85,18 @@ export async function removePrinterDir(
   printerId: string,
 ): Promise<void> {
   await rm(printerDir(paths, printerId), { recursive: true, force: true });
+}
+
+/**
+ * Where an upload with this id is staged before the driver copies it. Staged
+ * files are named by a server-made UUID, never by the uploaded file's name,
+ * and anything else is refused, as in `printerDir`.
+ */
+export function stagedFilePath(paths: DataPaths, stagedFileId: string): string {
+  if (!Uuid.safeParse(stagedFileId).success) {
+    throw new Error(`Not a staged file id: ${JSON.stringify(stagedFileId)}`);
+  }
+  return path.join(paths.staging, stagedFileId);
 }
 
 async function makeDir(dir: string): Promise<void> {
