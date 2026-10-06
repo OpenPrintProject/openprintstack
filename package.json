@@ -9,9 +9,11 @@
   },
   "scripts": {
     "build": "pnpm -r --if-present build",
+    "dev": "pnpm --filter @openprintstack/server dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
+    "start": "pnpm --filter @openprintstack/server start",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json && pnpm -r --parallel typecheck"
   },

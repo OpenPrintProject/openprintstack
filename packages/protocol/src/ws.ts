@@ -89,6 +89,8 @@ export const WsServerMessage = z
       type: z.literal("error"),
       code: z.string().min(1),
       message: z.string(),
+      /** The topic a refused subscribe was for, so the client knows which. */
+      topic: Topic.optional(),
     }),
     z.object({ type: z.literal("pong") }),
   ])

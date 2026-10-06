@@ -30,6 +30,7 @@ export type Config = {
    */
   readonly env: RuntimeEnv;
   readonly host: string;
+  /** 0 means any free port, which the server logs once it's listening. */
   readonly port: number;
   /**
    * Host names the server answers to besides localhost, 127.0.0.1, [::1] and
@@ -120,7 +121,8 @@ const variables = {
     .string()
     .regex(/^\S+$/, { error: "must not contain spaces" })
     .default("127.0.0.1"),
-  OPS_PORT: wholeNumber(1, 65_535).default(7337),
+  // 0 lets the system pick any free port; the server logs which.
+  OPS_PORT: wholeNumber(0, 65_535).default(7337),
   OPS_ALLOWED_HOSTS: hostList.optional(),
   OPS_DATA_DIR: z
     .string()

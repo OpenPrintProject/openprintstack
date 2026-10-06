@@ -25,12 +25,35 @@ export function originCheck(): MiddlewareHandler<AppEnv> {
     if (!SAFE_METHODS.has(c.req.method)) {
       const origin = c.req.header("origin");
       if (origin !== undefined && origin !== new URL(c.req.url).origin) {
-        throw new HttpError(
-          "origin_not_allowed",
-          "Requests from other sites aren't allowed.",
-        );
+        throw crossOrigin();
       }
     }
     await next();
   };
+}
+
+/**
+ * The WebSocket's Origin check (cross-site WebSocket hijacking). A WebSocket
+ * upgrade is a GET, which `originCheck` lets through, and browsers send
+ * Origin on every one, so here a missing Origin is refused too: 403.
+ */
+export function requireOrigin(): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    const origin = c.req.header("origin");
+    if (origin === undefined) {
+      throw new HttpError(
+        "origin_not_allowed",
+        "Send an Origin header: WebSocket connections must come from this server's own pages.",
+      );
+    }
+    if (origin !== new URL(c.req.url).origin) throw crossOrigin();
+    await next();
+  };
+}
+
+function crossOrigin(): HttpError {
+  return new HttpError(
+    "origin_not_allowed",
+    "Requests from other sites aren't allowed.",
+  );
 }

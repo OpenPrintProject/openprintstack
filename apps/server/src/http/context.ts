@@ -17,6 +17,7 @@ import type { Logger } from "../logger.ts";
 import type { DataPaths } from "../paths.ts";
 import type { PrinterService } from "../printers/printer-service.ts";
 import type { StateStore } from "../state/store.ts";
+import type { WsHub } from "../ws/hub.ts";
 
 /** Everything the HTTP app uses. PR 9's main.ts builds these. */
 export type AppDeps = {
@@ -31,6 +32,8 @@ export type AppDeps = {
   readonly sessions: SessionService;
   readonly passwords: Passwords;
   readonly backoff: LoginBackoff;
+  /** Takes over each socket the /api/ws upgrade opens. */
+  readonly hub: Pick<WsHub, "open">;
   readonly paths: DataPaths;
   /** The time in milliseconds, for sessions, logins and rows. */
   readonly now: () => number;

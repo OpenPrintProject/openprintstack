@@ -24,6 +24,7 @@ import { dataPaths, ensureDataDirs } from "../paths.ts";
 import { PrinterService } from "../printers/printer-service.ts";
 import { StateStore } from "../state/store.ts";
 import { debugLogger, tempDir, testDatabase } from "../test-utils.ts";
+import { WsHub, type WsHubOptions } from "../ws/hub.ts";
 import { createApp } from "./app.ts";
 import type { AppDeps } from "./context.ts";
 
@@ -40,6 +41,8 @@ export type TestAppOptions = {
   config?: Partial<Pick<Config, "host" | "allowedHosts">>;
   scrypt?: ScryptParams;
   backoff?: LoginBackoffOptions;
+  /** The hub's limits and timings, e.g. a lower backpressure threshold. */
+  hub?: Omit<WsHubOptions, "bus" | "store" | "sessions" | "logger">;
 };
 
 export type Call = {
@@ -97,6 +100,10 @@ export async function testApp(options: TestAppOptions = {}) {
   });
   const passwords = new Passwords(options.scrypt ?? FAST_SCRYPT);
   const backoff = new LoginBackoff(options.backoff);
+  const hub = new WsHub({ bus, store, sessions, logger, ...options.hub });
+  onTestFinished(async () => {
+    await hub.close();
+  });
   const deps: AppDeps = {
     config: { host: "127.0.0.1", allowedHosts: [], ...options.config },
     logger,
@@ -109,6 +116,7 @@ export async function testApp(options: TestAppOptions = {}) {
     sessions,
     passwords,
     backoff,
+    hub,
     paths,
     now,
   };
@@ -194,6 +202,7 @@ export async function testApp(options: TestAppOptions = {}) {
     paths,
     printers,
     drivers,
+    hub,
     events,
     logs: output,
     call,
