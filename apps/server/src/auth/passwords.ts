@@ -3,12 +3,15 @@
 
 import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 
+import { normalizePassword } from "@openprintstack/protocol";
+
 // Password hashing with scrypt from node:crypto. Hashes are stored as PHC
 // strings, which carry their own settings, so they can be raised later:
 //
 //   $scrypt$ln=17,r=8,p=1$<salt>$<hash>     (unpadded base64)
 //
-// Passwords are NFKC-normalised before they're counted or hashed, so the same
+// Passwords are NFKC-normalised before they're hashed (protocol's
+// `normalizePassword`, which also holds the length rules), so the same
 // password typed on two devices hashes the same (NIST SP 800-63B).
 
 /** scrypt's settings: N = 2^ln (memory and time), block size r, passes p. */
@@ -30,22 +33,6 @@ export const SCRYPT_PARAMS: ScryptParams = Object.freeze({
 
 const SALT_BYTES = 16;
 const KEY_BYTES = 32;
-
-/** The fewest code points a new password may have, after NFKC. */
-export const PASSWORD_MIN_LENGTH = 12;
-
-/** The most code points a password may have, after NFKC. */
-export const PASSWORD_MAX_LENGTH = 1024;
-
-/** The form passwords are counted and hashed in. */
-export function normalizePassword(password: string): string {
-  return password.normalize("NFKC");
-}
-
-/** How long the rules consider a password: its Unicode code points. */
-export function passwordLength(password: string): number {
-  return [...normalizePassword(password)].length;
-}
 
 /** What a PHC string holds. */
 type ParsedHash = {

@@ -2,6 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 export { ApiError } from "./api.ts";
+export {
+  NewPassword,
+  normalizePassword,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  passwordLength,
+  Username,
+} from "./auth.ts";
 export { Camera } from "./cameras.ts";
 export {
   Capabilities,
@@ -75,6 +83,7 @@ export {
   PrinterTopic,
   SessionUser,
   Topic,
+  topicKey,
   WsClientMessage,
   WsServerMessage,
   type WsSnapshotOf,

@@ -2,15 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { createRoute } from "@hono/zod-openapi";
-import { SessionUser } from "@openprintstack/protocol";
+import { NewPassword, SessionUser, Username } from "@openprintstack/protocol";
 import { z } from "zod";
 
 import { clientKey } from "../../auth/backoff.ts";
-import {
-  PASSWORD_MAX_LENGTH,
-  PASSWORD_MIN_LENGTH,
-  passwordLength,
-} from "../../auth/passwords.ts";
 import { HttpError } from "../errors.ts";
 import {
   clearSessionCookie,
@@ -38,34 +33,6 @@ import { newRoutes } from "../validation.ts";
 
 /** The most of a failed login's username its event keeps, in code points. */
 const LOGGED_USERNAME_LENGTH = 64;
-
-/** 1–32 ASCII letters, digits, dots, underscores or hyphens, after trimming. */
-export const Username = z
-  .string()
-  .trim()
-  .regex(/^[A-Za-z0-9._-]{1,32}$/, {
-    error: "Must be 1–32 letters (a–z), digits, dots, underscores or hyphens.",
-  })
-  .meta({
-    description:
-      "1–32 ASCII letters, digits, dots, underscores or hyphens, after trimming. Matched ignoring case.",
-  });
-
-/** 12–1024 code points after NFKC normalisation. */
-export const NewPassword = z
-  .string()
-  .normalize("NFKC")
-  .refine((password) => passwordLength(password) >= PASSWORD_MIN_LENGTH, {
-    error: `Must be at least ${PASSWORD_MIN_LENGTH} characters.`,
-  })
-  .refine((password) => passwordLength(password) <= PASSWORD_MAX_LENGTH, {
-    error: `Must be at most ${PASSWORD_MAX_LENGTH} characters.`,
-  })
-  .meta({
-    minLength: PASSWORD_MIN_LENGTH,
-    maxLength: PASSWORD_MAX_LENGTH,
-    description: `${PASSWORD_MIN_LENGTH}–${PASSWORD_MAX_LENGTH} characters (Unicode code points), counted after NFKC normalisation. Spaces count and nothing is trimmed.`,
-  });
 
 const SetupRequest = z
   .object({ username: Username, password: NewPassword })

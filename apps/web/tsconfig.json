@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2024", "dom"],
+    "jsx": "react-jsx",
+    // Node's types are here for the config files and scripts, which run in
+    // Node; ESLint keeps Node's globals and modules out of src/.
+    "types": ["vite/client", "node"],
+    // For shadcn's vendored components and its CLI. Our own code uses
+    // relative imports.
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": ["src", "scripts", "*.ts"]
+}
