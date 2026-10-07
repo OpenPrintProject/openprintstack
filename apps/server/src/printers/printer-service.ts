@@ -4,7 +4,7 @@
 import { isDeepStrictEqual } from "node:util";
 
 import type { DriverModule, DriverResult } from "@openprintstack/driver-sdk";
-import type { PrinterStatus } from "@openprintstack/protocol";
+import { hasActiveJob } from "@openprintstack/protocol";
 import { SqliteError } from "better-sqlite3";
 import { z } from "zod";
 
@@ -39,15 +39,6 @@ import type { StateStore } from "../state/store.ts";
 // Each printer's lifecycle steps run one at a time, so a delete can't overlap
 // a restart. Starting never throws: a driver that can't run leaves its
 // printer `offline` with the reason as its error.
-
-/** A settings edit is refused while the printer is in one of these. */
-export const JOB_STATUSES: readonly PrinterStatus[] = [
-  "preparing",
-  "printing",
-  "pausing",
-  "paused",
-  "cancelling",
-];
 
 export type PrinterServiceErrorCode =
   | "printer_not_found"
@@ -361,7 +352,7 @@ export class PrinterService {
 
   #refuseDuringJob(printerId: string): void {
     const status = this.#store.get(printerId)?.state.status;
-    if (status !== undefined && JOB_STATUSES.includes(status)) {
+    if (status !== undefined && hasActiveJob(status)) {
       throw new PrinterServiceError(
         "job_active",
         `The settings can't change while the printer is ${status}.`,

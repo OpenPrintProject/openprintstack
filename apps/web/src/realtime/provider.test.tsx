@@ -19,6 +19,7 @@ import {
   useFleet,
   usePrinter,
   useRealtime,
+  useRealtimeEvents,
 } from "./provider.tsx";
 
 const OTHER_BOOT = "0199b3a0-1c00-7000-8000-00000000b002";
@@ -398,5 +399,77 @@ describe("usePrinter", () => {
         topic: { name: "printer", printerId: "printer-1" },
       },
     ]);
+  });
+});
+
+describe("useRealtimeEvents", () => {
+  function Listener({ heard }: { heard: string[] }) {
+    useFleet();
+    useRealtimeEvents((event) => {
+      heard.push(`${event.type} ${event.seq}`);
+    });
+    return null;
+  }
+
+  it("hears live events, not the snapshot, and nothing once unmounted", async () => {
+    const heard: string[] = [];
+    const { sockets, view } = setup(<Listener heard={heard} />);
+    await connect(sockets.last);
+    const fleet = { name: "fleet" } as const;
+    await server(() => {
+      sockets.last.receive({
+        type: "snapshot",
+        topic: fleet,
+        seq: 42,
+        data: [printerSnapshot("printer-1", "Sim 1", { status: "error" })],
+      });
+      sockets.last.receive({
+        type: "event",
+        topic: fleet,
+        event: eventOf("printer.alert", 43),
+      });
+    });
+
+    view.unmount();
+    expect(heard).toEqual(["printer.alert 43"]);
+  });
+
+  it("uses the latest listener without subscribing again", async () => {
+    const heard: string[] = [];
+    function Changing() {
+      const [label, setLabel] = useState("first");
+      useFleet();
+      useRealtimeEvents((event) => {
+        heard.push(`${label} ${event.seq}`);
+        setLabel("second");
+      });
+      return null;
+    }
+    const { sockets } = setup(<Changing />);
+    await connect(sockets.last);
+    const fleet = { name: "fleet" } as const;
+    await server(() => {
+      sockets.last.receive({
+        type: "snapshot",
+        topic: fleet,
+        seq: 42,
+        data: [printerSnapshot("printer-1", "Sim 1")],
+      });
+    });
+
+    for (const seq of [43, 44]) {
+      await server(() => {
+        sockets.last.receive({
+          type: "event",
+          topic: fleet,
+          event: eventOf("printer.alert", seq),
+        });
+      });
+    }
+
+    expect(heard).toEqual(["first 43", "second 44"]);
+    expect(
+      sockets.last.sent.filter((message) => message.type === "subscribe"),
+    ).toHaveLength(1);
   });
 });

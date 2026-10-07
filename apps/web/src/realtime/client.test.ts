@@ -451,6 +451,158 @@ describe("snapshots and events", () => {
   });
 });
 
+describe("event listeners", () => {
+  function printerSnapshotMessage(socket: FakeWebSocket, seq: number): void {
+    socket.receive({
+      type: "snapshot",
+      topic: PRINTER,
+      seq,
+      data: printerSnapshot("printer-1", "Sim 1", { seq }),
+    });
+  }
+
+  function printerEvent(socket: FakeWebSocket, seq: number): void {
+    socket.receive({
+      type: "event",
+      topic: PRINTER,
+      event: eventOf("printer.telemetry", seq),
+    });
+  }
+
+  /** Records what a listener hears, after what the sink was handed. */
+  function listen(client: RealtimeClient, sink: RecordingSink): string[] {
+    const heard: string[] = [];
+    client.onEvent((event) => {
+      heard.push(`${event.seq} after ${sink.calls.at(-1) ?? "nothing"}`);
+    });
+    return heard;
+  }
+
+  it("hears each event once, after the sink, though it arrives on every topic it matches", () => {
+    const { client, sockets, sink } = setup();
+    client.retain(FLEET);
+    client.retain(PRINTER);
+    const heard = listen(client, sink);
+    client.start();
+    connect(sockets.last);
+    fleetSnapshot(sockets.last, 42);
+    printerSnapshotMessage(sockets.last, 42);
+
+    fleetEvent(sockets.last, 43);
+    printerEvent(sockets.last, 43);
+    fleetEvent(sockets.last, 44);
+    printerEvent(sockets.last, 44);
+
+    expect(heard).toEqual([
+      "43 after event fleet 43",
+      "44 after event fleet 44",
+    ]);
+    expect(sink.calls.filter((call) => call.startsWith("event"))).toHaveLength(
+      4,
+    );
+  });
+
+  it("hears an event that only a later topic gets", () => {
+    const { client, sockets, sink } = setup();
+    client.retain(FLEET);
+    client.retain(PRINTER);
+    const heard = listen(client, sink);
+    client.start();
+    connect(sockets.last);
+    printerSnapshotMessage(sockets.last, 42);
+
+    // The fleet's snapshot hasn't come, so the fleet drops 43.
+    fleetEvent(sockets.last, 43);
+    printerEvent(sockets.last, 43);
+
+    expect(heard).toEqual(["43 after event printer 43"]);
+  });
+
+  it("hears nothing the topics drop", () => {
+    const { client, sockets, sink } = setup();
+    client.retain(FLEET);
+    const heard = listen(client, sink);
+    client.start();
+    connect(sockets.last);
+
+    fleetEvent(sockets.last, 41);
+    fleetSnapshot(sockets.last, 42);
+    fleetEvent(sockets.last, 42);
+
+    expect(heard).toEqual([]);
+  });
+
+  it("hears events the sink can't apply", () => {
+    const { client, sockets, sink } = setup();
+    client.retain(FLEET);
+    const heard = listen(client, sink);
+    client.start();
+    connect(sockets.last);
+    fleetSnapshot(sockets.last, 42);
+    sink.answer = "resync";
+
+    fleetEvent(sockets.last, 43);
+
+    expect(heard).toEqual(["43 after event fleet 43"]);
+  });
+
+  it("hears a restarted server's lower seqs", async () => {
+    const { client, sockets, sink } = setup();
+    client.retain(FLEET);
+    const heard = listen(client, sink);
+    client.start();
+    connect(sockets.last);
+    fleetSnapshot(sockets.last, 42);
+    fleetEvent(sockets.last, 43);
+
+    sockets.last.drop();
+    await vi.advanceTimersByTimeAsync(250);
+    connect(sockets.last, OTHER_BOOT);
+    fleetSnapshot(sockets.last, 3);
+    fleetEvent(sockets.last, 4);
+
+    expect(heard).toEqual(["43 after event fleet 43", "4 after event fleet 4"]);
+  });
+
+  it("stops calling a listener once it stops listening", () => {
+    const { client, sockets } = setup();
+    client.retain(FLEET);
+    const heard: number[] = [];
+    const stop = client.onEvent((event) => {
+      heard.push(event.seq);
+    });
+    client.start();
+    connect(sockets.last);
+    fleetSnapshot(sockets.last, 42);
+    fleetEvent(sockets.last, 43);
+
+    stop();
+    fleetEvent(sockets.last, 44);
+
+    expect(heard).toEqual([43]);
+  });
+
+  it("still calls the other listeners when one throws, and logs it", () => {
+    const { client, sockets, errors } = setup();
+    client.retain(FLEET);
+    const heard: number[] = [];
+    client.onEvent(() => {
+      throw new Error("A bug in a listener.");
+    });
+    client.onEvent((event) => {
+      heard.push(event.seq);
+    });
+    client.start();
+    connect(sockets.last);
+    fleetSnapshot(sockets.last, 42);
+
+    fleetEvent(sockets.last, 43);
+
+    expect(heard).toEqual([43]);
+    expect(errors).toEqual(["A realtime event listener failed."]);
+  });
+});
+
 describe("invalid messages", () => {
   it("resyncs the topic a message that fails its check was for", () => {
     const { client, sockets, sink, errors } = setup();

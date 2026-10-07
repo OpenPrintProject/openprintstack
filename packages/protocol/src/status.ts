@@ -33,3 +33,19 @@ export const ONLINE_STATUSES: readonly PrinterStatus[] =
 export function isOnline(status: PrinterStatus): boolean {
   return ONLINE_STATUSES.includes(status);
 }
+
+/**
+ * The statuses in which a printer has a job: a settings change is refused
+ * (409 `job_active`) while it's in one of these.
+ */
+export const JOB_STATUSES: readonly PrinterStatus[] = [
+  "preparing",
+  "printing",
+  "pausing",
+  "paused",
+  "cancelling",
+];
+
+export function hasActiveJob(status: PrinterStatus): boolean {
+  return JOB_STATUSES.includes(status);
+}

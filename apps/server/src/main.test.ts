@@ -58,7 +58,9 @@ function run(env: Record<string, string>, nodeOptions: string[] = []) {
   child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
     stderr += chunk;
   });
-  const exited = once(child, "exit").then(([code]) => code as number | null);
+  // "close", not "exit": when "exit" fires, the child's stdio may still be
+  // open, with its last log lines unread.
+  const exited = once(child, "close").then(([code]) => code as number | null);
 
   const lines = (): Line[] =>
     stdout
@@ -92,10 +94,20 @@ function run(env: Record<string, string>, nodeOptions: string[] = []) {
     });
   }
 
+  /**
+   * The log line with this message. When the process exits at once, an
+   * earlier line's write can still be in flight and land after this one (the
+   * logger writes stdout asynchronously, and the exit flushes what's queued
+   * first), so it needn't be the last line.
+   */
+  const logged = (msg: string): Line | undefined =>
+    lines().find((line) => line.msg === msg);
+
   return {
     child,
     exited,
     lines,
+    logged,
     waitForLog,
     stdout: () => stdout,
     stderr: () => stderr,
@@ -165,11 +177,10 @@ describe("main.ts", { timeout: TIMEOUT_MS }, () => {
     const port = (taken.address() as net.AddressInfo).port;
     const main = run({ ...(await serverEnv()), OPS_PORT: String(port) });
 
+    const msg = `The server couldn't start: Port ${port} on 127.0.0.1 is already in use. Stop whatever is using it, or set OPS_PORT to another port.`;
+
     expect(await main.exited).toBe(1);
-    expect(main.lines().at(-1)).toMatchObject({
-      level: "fatal",
-      msg: `The server couldn't start: Port ${port} on 127.0.0.1 is already in use. Stop whatever is using it, or set OPS_PORT to another port.`,
-    });
+    expect(main.logged(msg)).toMatchObject({ level: "fatal", msg });
   });
 
   it.each([
@@ -194,7 +205,7 @@ describe("main.ts", { timeout: TIMEOUT_MS }, () => {
       main.child.kill(signal);
 
       expect(await main.exited).toBe(1);
-      expect(main.lines().at(-1)).toMatchObject({
+      expect(main.logged(msg)).toMatchObject({
         level: "fatal",
         component: "process",
         msg,
@@ -228,10 +239,8 @@ describe("main.ts", { timeout: TIMEOUT_MS }, () => {
 
     expect(await main.exited).toBe(1);
     expect(performance.now() - signalled).toBeLessThan(1500);
-    expect(main.lines().at(-1)).toMatchObject({
-      level: "warn",
-      msg: "A second signal: exiting without finishing",
-      signal: "SIGINT",
-    });
+    expect(
+      main.logged("A second signal: exiting without finishing"),
+    ).toMatchObject({ level: "warn", signal: "SIGINT" });
   });
 });

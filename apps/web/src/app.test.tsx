@@ -1,45 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Open Print Stack contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { createMemoryHistory } from "@tanstack/react-router";
-import { act, render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { act, screen, waitFor } from "@testing-library/react";
+import type userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { sessionQuery } from "./api/session.ts";
-import { AppRoot, createApp, socketUrl } from "./app.tsx";
+import { socketUrl } from "./app.tsx";
 import { apiError, FakeServer, ROB } from "./test/fake-server.ts";
 import { printerSnapshot } from "./test/fake-socket.ts";
+import { heading, location, renderApp } from "./test/render-app.tsx";
 
 // The whole app (router, guards, forms, API client and realtime client)
 // against a fake server.
-
-function renderApp(server: FakeServer, path = "/") {
-  const app = createApp({
-    origin: "http://localhost:5173",
-    fetch: server.fetch,
-    createSocket: server.createSocket,
-    history: createMemoryHistory({ initialEntries: [path] }),
-    random: () => 0,
-    retryDelayMs: 1,
-  });
-  // Every page the router starts loading, redirects included.
-  const visited: string[] = [];
-  app.router.subscribe("onBeforeLoad", (event) => {
-    visited.push(event.toLocation.pathname);
-  });
-  render(<AppRoot app={app} />);
-  return { app, visited, user: userEvent.setup() };
-}
-
-/** Where the app is: path, search and hash. */
-function location(app: ReturnType<typeof createApp>): string {
-  return app.router.state.location.href;
-}
-
-async function heading(name: string): Promise<HTMLElement> {
-  return screen.findByRole("heading", { name });
-}
 
 const SETUP = "Welcome to Open Print Stack";
 const LOGIN = "Log in to Open Print Stack";
@@ -264,9 +237,13 @@ describe("the logged-in shell", () => {
     expect(screen.getByText("rob")).toBeDefined();
     await waitFor(() => {
       expect(
-        screen.getAllByRole("listitem").map((item) => item.textContent),
-      ).toEqual(["Sim 2Error", "Sim 10Idle"]);
+        screen
+          .getAllByRole("heading", { level: 2 })
+          .map((each) => each.textContent),
+      ).toEqual(["Sim 2", "Sim 10"]);
     });
+    expect(screen.getByText("Error")).toBeDefined();
+    expect(screen.getByText("Idle")).toBeDefined();
     expect(screen.getByRole("status").textContent).toBe("Live");
   });
 

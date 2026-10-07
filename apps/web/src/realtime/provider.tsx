@@ -1,13 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Open Print Stack contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import type { PrinterSnapshot, Topic } from "@openprintstack/protocol";
+import type {
+  OpsEvent,
+  PrinterSnapshot,
+  Topic,
+} from "@openprintstack/protocol";
 import { skipToken, type QueryClient, useQuery } from "@tanstack/react-query";
 import {
   createContext,
   type ReactNode,
   use,
   useEffect,
+  useEffectEvent,
   useMemo,
   useState,
   useSyncExternalStore,
@@ -84,11 +89,31 @@ export function useTopic(topic: Topic): void {
   useEffect(() => client.retain(topic), [client, topic]);
 }
 
-const FLEET: Topic = { name: "fleet" };
+/**
+ * Calls `listener` with each live event while the component is mounted:
+ * once per event, from whichever topics in use carry it, after the cache has
+ * been updated. Snapshots aren't events, so state already there when a page
+ * opens isn't heard. The listener can change between renders (it's an
+ * Effect Event).
+ */
+export function useRealtimeEvents(listener: (event: OpsEvent) => void): void {
+  const client = useRealtime();
+  const onEvent = useEffectEvent(listener);
+  useEffect(
+    () =>
+      client.onEvent((event) => {
+        onEvent(event);
+      }),
+    [client],
+  );
+}
+
+/** Every printer's events; the logged-in layout keeps it for event toasts. */
+export const FLEET_TOPIC: Topic = { name: "fleet" };
 
 /** Every printer, live and sorted by name; undefined until the snapshot. */
 export function useFleet(): PrinterSnapshot[] | undefined {
-  useTopic(FLEET);
+  useTopic(FLEET_TOPIC);
   return useQuery<FleetData, Error, FleetData>({
     queryKey: realtimeKeys.fleet,
     queryFn: skipToken,

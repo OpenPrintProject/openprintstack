@@ -1,18 +1,25 @@
 // SPDX-FileCopyrightText: 2026 Open Print Stack contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  redirect,
+} from "@tanstack/react-router";
 import { LogOutIcon } from "lucide-react";
 
 import { errorMessage } from "../api/errors.ts";
 import { sessionStatus } from "../api/session.ts";
 import { ConnectionStatus } from "../components/connection-status.tsx";
 import { Button } from "../components/ui/button.tsx";
+import { Toaster } from "../components/ui/sonner.tsx";
+import { EventToasts } from "../printers/event-toasts.tsx";
 import { RealtimeProvider, useRealtime } from "../realtime/provider.tsx";
 
 // Every page behind the login. The guard sends you to /setup or /login (and
-// back here afterwards); the layout holds the page's realtime connection and
-// the header.
+// back here afterwards); the layout holds the page's realtime connection, the
+// header, and the toasts (with those for every printer's events).
 
 export const Route = createFileRoute("/_authed")({
   beforeLoad: async ({ context, location }) => {
@@ -34,6 +41,8 @@ function AuthedLayout() {
           <Outlet />
         </main>
       </div>
+      <EventToasts />
+      <Toaster />
     </RealtimeProvider>
   );
 }
@@ -44,7 +53,9 @@ function Header() {
   return (
     <header className="border-b">
       <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 p-4">
-        <span className="font-heading font-semibold">Open Print Stack</span>
+        <Link to="/" className="font-heading font-semibold">
+          Open Print Stack
+        </Link>
         <ConnectionStatus />
         <div className="ml-auto flex items-center gap-3">
           <span className="text-sm text-muted-foreground">{user.username}</span>

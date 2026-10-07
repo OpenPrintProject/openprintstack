@@ -27,6 +27,8 @@ import { backoffDelay } from "./backoff.ts";
 //   messages   a topic's events wait for its snapshot, and only events newer
 //              than what it has (by seq) are applied; every message is
 //              checked against protocol's WsServerMessage
+//   onEvent    listeners hear each event once, after the sink, though it
+//              arrives once per topic it matches (toasts, refetching)
 //
 // When the connection ends:
 //
@@ -160,12 +162,19 @@ export class RealtimeClient {
   readonly #log: Pick<Console, "error">;
   readonly #subscriptions = new Map<string, Subscription>();
   readonly #statusListeners = new Set<() => void>();
+  readonly #eventListeners = new Set<(event: OpsEvent) => void>();
   #status: ConnectionStatus = "stopped";
   #running = false;
   /** hello has arrived since start(). */
   #wasLive = false;
   #connection: Connection | null = null;
   #bootId: string | null = null;
+  /**
+   * The seq of the last event the event listeners heard. The server sends
+   * each event to every topic it matches before the next event, so a seq no
+   * higher than this one is the same event again, on another topic.
+   */
+  #heardSeq = -1;
   /** Attempts in a row that ended before hello. */
   #failures = 0;
   /** Changed by stop(), so a session check that answers late is ignored. */
@@ -188,6 +197,17 @@ export class RealtimeClient {
     this.#statusListeners.add(listener);
     return () => {
       this.#statusListeners.delete(listener);
+    };
+  }
+
+  /**
+   * Calls `listener` with each event from any topic in use, once, after the
+   * sink has applied it. Returns a function that stops.
+   */
+  onEvent(listener: (event: OpsEvent) => void): () => void {
+    this.#eventListeners.add(listener);
+    return () => {
+      this.#eventListeners.delete(listener);
     };
   }
 
@@ -348,6 +368,7 @@ export class RealtimeClient {
     // snapshot sets its seq.
     if (this.#bootId !== null && this.#bootId !== bootId) {
       this.#options.sink.reset();
+      this.#heardSeq = -1;
     }
     this.#bootId = bootId;
     this.#setStatus("live");
@@ -377,6 +398,16 @@ export class RealtimeClient {
     subscription.seq = event.seq;
     if (this.#options.sink.event(subscription.topic, event) === "resync") {
       this.#subscribe(subscription);
+    }
+    if (event.seq <= this.#heardSeq) return;
+    this.#heardSeq = event.seq;
+    for (const listener of this.#eventListeners) {
+      try {
+        listener(event);
+      } catch (error) {
+        // One broken listener mustn't keep the event from the others.
+        this.#log.error("A realtime event listener failed.", error);
+      }
     }
   }
 

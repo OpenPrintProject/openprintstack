@@ -9,6 +9,7 @@ import {
 import {
   IsoDateTime,
   JsonValue,
+  PrinterName,
   PrinterSnapshot,
 } from "@openprintstack/protocol";
 import { z } from "zod";
@@ -28,25 +29,6 @@ import { newRoutes } from "../validation.ts";
 
 // The driver types, and printers: their live snapshots (from the state store)
 // and their stored config (from the printers table, settings included).
-
-/** Trimmed, NFC, 1–64 code points, no control characters. */
-export const PrinterName = z
-  .string()
-  .trim()
-  .normalize("NFC")
-  .refine((name) => [...name].length >= 1, { error: "Must not be empty." })
-  .refine((name) => [...name].length <= 64, {
-    error: "Must be at most 64 characters.",
-  })
-  .refine((name) => !/\p{Cc}/u.test(name), {
-    error: "Must not contain control characters.",
-  })
-  .meta({
-    minLength: 1,
-    maxLength: 64,
-    description:
-      "1–64 characters after trimming, with no control characters. Unique, ignoring the case of A–Z.",
-  });
 
 const SettingsInput = z.record(z.string(), JsonValue).meta({
   description:

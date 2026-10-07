@@ -46,12 +46,29 @@ export async function renderApiTypes(): Promise<string> {
     // (TS2502, on 5.9 as on 6.0). protocol's JsonValue type is the same
     // thing as a named type, which TypeScript accepts.
     inject: 'import type { JsonValue } from "@openprintstack/protocol";',
-    transform: (_schema, { path }) =>
-      path === "#/components/schemas/JsonValue"
-        ? ts.factory.createTypeReferenceNode("JsonValue")
-        : undefined,
+    transform: (schema, { path }) => {
+      if (path === "#/components/schemas/JsonValue") {
+        return ts.factory.createTypeReferenceNode("JsonValue");
+      }
+      // A file's bytes (an upload's body, a snapshot), which the spec gives
+      // as a string with a contentMediaType, as OpenAPI 3.1 does. In the
+      // browser they're a Blob (a File is one).
+      if (isBinary(schema)) return ts.factory.createTypeReferenceNode("Blob");
+      return undefined;
+    },
   });
   return API_TYPES_HEADER + astToString(ast);
+}
+
+/** A string schema for bytes of a non-JSON media type. */
+function isBinary(schema: unknown): boolean {
+  if (typeof schema !== "object" || schema === null) return false;
+  const { type, contentMediaType } = schema as Record<string, unknown>;
+  return (
+    type === "string" &&
+    typeof contentMediaType === "string" &&
+    !contentMediaType.includes("json")
+  );
 }
 
 /**

@@ -1875,7 +1875,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "image/*": string;
+                    "image/*": Blob;
                 };
             };
             /** @description The request isn't valid: validation_failed, invalid_json or upload_incomplete. */
@@ -2248,7 +2248,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/octet-stream": string;
+                "application/octet-stream": Blob;
             };
         };
         responses: {

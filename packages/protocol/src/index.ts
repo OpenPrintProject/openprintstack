@@ -65,10 +65,17 @@ export {
 } from "./events.ts";
 export { PrinterFile } from "./files.ts";
 export { COMMAND_POLICY, type CommandPolicy } from "./policy.ts";
+export { PrinterName } from "./printers.ts";
 export { initialPrinterState, reducePrinterState } from "./reducer.ts";
 export type { Serializable } from "./serializable.ts";
 export { PrinterInfo, PrinterSnapshot, PrinterState } from "./state.ts";
-export { isOnline, ONLINE_STATUSES, PrinterStatus } from "./status.ts";
+export {
+  hasActiveJob,
+  isOnline,
+  JOB_STATUSES,
+  ONLINE_STATUSES,
+  PrinterStatus,
+} from "./status.ts";
 export {
   emptyTelemetry,
   FanReading,
