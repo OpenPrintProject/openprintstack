@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Open Print Stack contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+// First, before anything builds a Zod schema (see the module).
+import "./zod-config.ts";
 import "./styles/index.css";
 
 import { StrictMode } from "react";

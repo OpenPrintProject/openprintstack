@@ -26,9 +26,11 @@ import { DriverRegistry } from "./drivers/registry.ts";
 import { EventPersistence } from "./events/persistence.ts";
 import { Pruner } from "./events/pruner.ts";
 import { createApp } from "./http/app.ts";
+import { findWebApp, type WebApp } from "./http/web.ts";
 import type { Logger } from "./logger.ts";
 import { dataPaths, ensureDataDirs } from "./paths.ts";
 import { PrinterService } from "./printers/printer-service.ts";
+import { WEB_BUILD_DIR } from "./server-dir.ts";
 import { StateStore } from "./state/store.ts";
 import { WsHub } from "./ws/hub.ts";
 
@@ -37,7 +39,8 @@ import { WsHub } from "./ws/hub.ts";
 //
 //   start  data dirs → database and migrations → state store and bus →
 //          persistence and pruner → printers (each driver's first connect
-//          attempt) → HTTP and WebSocket listening → system.started
+//          attempt) → the web app's build looked for → HTTP and WebSocket
+//          listening → system.started
 //   stop   system.stopping → no new connections, sockets closed with 1001,
 //          requests in flight finished → drivers stopped → pruner stopped →
 //          persistence flushed → database closed
@@ -52,6 +55,8 @@ export type StartServerOptions = {
   logger: Logger;
   /** The driver types: every built-in one by default. */
   registry?: DriverRegistry;
+  /** Where the web app's build is: apps/web/dist by default. */
+  webDir?: string;
 };
 
 export type RunningServer = {
@@ -122,6 +127,9 @@ export async function startServer(
   await printers.startAll();
   log.info({ printers: store.list().length }, "Started the printers");
 
+  const web = findWebApp(config.env, options.webDir ?? WEB_BUILD_DIR);
+  logWebApp(log, web);
+
   const sessions = new SessionService({
     sessions: repos.sessions,
     users: repos.users,
@@ -141,6 +149,7 @@ export async function startServer(
     backoff: new LoginBackoff(),
     hub,
     paths,
+    web,
     now: () => Date.now(),
   });
   const server = createHttpServer(app);
@@ -196,6 +205,26 @@ export async function startServer(
     bootId: bus.bootId,
     stop: () => (stopping ??= shutdown()),
   };
+}
+
+/** Says what pages will get: a warning when there's no build. */
+function logWebApp(log: Logger, web: WebApp): void {
+  switch (web.kind) {
+    case "build":
+      log.info({ dir: web.dir }, `Serving the web app from ${web.dir}`);
+      break;
+    case "missing":
+      log.warn(
+        { dir: web.dir },
+        `The web app isn't built (there's no ${web.dir}/index.html), so only the API is served. Run pnpm build, then restart the server.`,
+      );
+      break;
+    case "development":
+      log.info(
+        "In development, Vite serves the web app (normally at http://localhost:5173)",
+      );
+      break;
+  }
 }
 
 /**

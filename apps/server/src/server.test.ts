@@ -20,12 +20,15 @@ import {
   testRegistry,
 } from "./drivers/test-driver.ts";
 import { testApp } from "./http/test-app.ts";
+import { fakeBuild, INDEX_HTML, SECRET } from "./http/test-web.ts";
+import { DEVELOPMENT_MESSAGE, NOT_BUILT_MESSAGE } from "./http/web.ts";
 import {
   ListenError,
   type RunningServer,
   SERVER_VERSION,
   startServer,
 } from "./server.ts";
+import { WEB_BUILD_DIR } from "./server-dir.ts";
 import {
   debugLogger,
   jsonLines,
@@ -83,13 +86,14 @@ function storedEvents(dataDir: string): string[] {
   }
 }
 
-async function start(config: Config) {
+async function start(config: Config, webDir?: string) {
   const { logger, output } = await debugLogger();
   const drivers = new TestDrivers();
   const server = await startServer({
     config,
     logger,
     registry: testRegistry(drivers),
+    ...(webDir !== undefined && { webDir }),
   });
   onTestFinished(async () => {
     await server.stop();
@@ -182,8 +186,9 @@ describe("startServer", () => {
   it("starts the printers before it listens, and publishes system.started last", async () => {
     const config = await testConfig();
     const printerId = storePrinter(config.dataDir);
+    const webDir = await fakeBuild();
 
-    const { server, logs } = await start(config);
+    const { server, logs } = await start(config, webDir);
     const token = await setupAdmin(server);
     const client = await TestClient.connect(server.url, { token });
     client.send({ type: "subscribe", topic: { name: "fleet" } });
@@ -193,8 +198,9 @@ describe("startServer", () => {
     const messages = jsonLines(logs)
       .filter((line) => line.component === "server")
       .map((line) => line.msg);
-    expect(messages.slice(0, 2)).toEqual([
+    expect(messages.slice(0, 3)).toEqual([
       "Started the printers",
+      `Serving the web app from ${webDir}`,
       `Listening on ${server.url}`,
     ]);
     // Already connected when the first client could look.
@@ -538,4 +544,118 @@ describe("HTTP over a real socket", () => {
     expect(message.statusCode).toBe(401);
     expect(continued).toBe(true);
   });
+});
+
+describe("the web app", () => {
+  /**
+   * GETs a path exactly as given, without a client tidying it first, on a
+   * connection of its own that closes after the answer. (@hono/node-server
+   * finishes a file's response a tick after its last byte is sent, so a stop
+   * straight after a kept-alive one waits for the client to close it.)
+   */
+  function rawGet(
+    port: number,
+    rawPath: string,
+  ): Promise<{ status: number; body: string }> {
+    return new Promise((resolve, reject) => {
+      const request = http.request({
+        host: "127.0.0.1",
+        port,
+        path: rawPath,
+        agent: false,
+      });
+      request.on("error", reject);
+      request.on("response", (message: IncomingMessage) => {
+        let body = "";
+        message.setEncoding("utf8");
+        message.on("data", (chunk: string) => {
+          body += chunk;
+        });
+        message.on("end", () => {
+          resolve({ status: message.statusCode ?? 0, body });
+        });
+      });
+      request.end();
+    });
+  }
+
+  it("serves the build it's given, and says where from", async () => {
+    const webDir = await fakeBuild();
+    const { server, logs } = await start(await testConfig(), webDir);
+
+    const answer = await rawGet(server.port, "/events?types=printer.alert");
+
+    expect(answer).toEqual({ status: 200, body: INDEX_HTML });
+    expect(
+      jsonLines(logs).find(
+        (line) => line.msg === `Serving the web app from ${webDir}`,
+      ),
+    ).toMatchObject({ level: "info", component: "server", dir: webDir });
+  });
+
+  it("looks in apps/web/dist by default", async () => {
+    const { logs } = await start(await testConfig());
+
+    const line = jsonLines(logs).find((l) => l.dir !== undefined);
+    expect(line?.dir).toBe(WEB_BUILD_DIR);
+  });
+
+  it("warns when there's no build, and pages say how to make one", async () => {
+    const webDir = path.join(await tempDir(), "dist");
+    const { server, logs } = await start(await testConfig(), webDir);
+
+    const page = await fetch(`${server.url}/`);
+    const api = await fetch(`${server.url}/api/auth/me`);
+
+    expect(page.status).toBe(503);
+    expect(await page.text()).toBe(NOT_BUILT_MESSAGE);
+    expect(api.status).toBe(401);
+    expect(jsonLines(logs).find((line) => line.level === "warn")).toMatchObject(
+      {
+        component: "server",
+        dir: webDir,
+        msg: `The web app isn't built (there's no ${webDir}/index.html), so only the API is served. Run pnpm build, then restart the server.`,
+      },
+    );
+  });
+
+  it("in development, points pages to Vite even with a build there", async () => {
+    const webDir = await fakeBuild();
+    const { server, logs } = await start(
+      await testConfig({ env: "development" }),
+      webDir,
+    );
+
+    const page = await fetch(`${server.url}/`);
+
+    expect(page.status).toBe(404);
+    expect(await page.text()).toBe(DEVELOPMENT_MESSAGE);
+    expect(
+      jsonLines(logs).find((line) =>
+        String(line.msg).startsWith("In development, Vite serves"),
+      ),
+    ).toMatchObject({ level: "info", component: "server" });
+  });
+
+  it.each([
+    "/../secret.txt",
+    "/assets/../../secret.txt",
+    "/%2e%2e/secret.txt",
+    "/assets/%2e%2e/%2e%2e/secret.txt",
+    "/..%2fsecret.txt",
+    "/assets/..%2f..%2fsecret.txt",
+    "/..\\secret.txt",
+    "/assets/..%5c..%5csecret.txt",
+    "//secret.txt",
+  ])(
+    "never serves a file outside the build for the request line %s",
+    async (rawPath) => {
+      const webDir = await fakeBuild();
+      const { server } = await start(await testConfig(), webDir);
+
+      const answer = await rawGet(server.port, rawPath);
+
+      expect(answer.body).not.toContain(SECRET.trim());
+    },
+  );
 });

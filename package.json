@@ -15,6 +15,7 @@
     "lint": "eslint .",
     "start": "pnpm --filter @openprintstack/server start",
     "test": "vitest run",
+    "test:smoke": "pnpm -r --if-present test:smoke",
     "typecheck": "tsc -p tsconfig.json && pnpm -r --parallel typecheck"
   },
   "devDependencies": {

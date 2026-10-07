@@ -5,14 +5,15 @@
 // environment given here. Everything it wires up is tested in-process
 // through startServer() and lifecycle.ts; these check the wiring itself.
 
-import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { existsSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 
 import { describe, expect, it, onTestFinished } from "vitest";
 
 import { openDatabase } from "./db/client.ts";
+import { runNode } from "./test-process.ts";
 import { tempDir } from "./test-utils.ts";
 import { TestClient } from "./ws/test-client.ts";
 
@@ -35,83 +36,15 @@ process.on("SIGHUP", () => {
 /** Generous: each run starts a fresh Node process. */
 const TIMEOUT_MS = 20_000;
 
-type Line = Record<string, unknown>;
-
-function run(env: Record<string, string>, nodeOptions: string[] = []) {
-  const child = spawn(process.execPath, [...nodeOptions, MAIN], {
-    // Nothing from this process's environment but what Node needs.
-    env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "", ...env },
-    stdio: ["ignore", "pipe", "pipe"],
+function run(
+  env: Record<string, string>,
+  nodeOptions: string[] = [],
+  options: { cwd?: string } = {},
+) {
+  return runNode([...nodeOptions, MAIN], env, {
+    ...options,
+    waitMs: TIMEOUT_MS / 2,
   });
-  onTestFinished(() => {
-    if (child.exitCode === null && child.signalCode === null) {
-      child.kill("SIGKILL");
-    }
-  });
-  let stdout = "";
-  let stderr = "";
-  const waiters = new Set<() => void>();
-  child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
-    stdout += chunk;
-    for (const wake of [...waiters]) wake();
-  });
-  child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
-    stderr += chunk;
-  });
-  // "close", not "exit": when "exit" fires, the child's stdio may still be
-  // open, with its last log lines unread.
-  const exited = once(child, "close").then(([code]) => code as number | null);
-
-  const lines = (): Line[] =>
-    stdout
-      .split("\n")
-      .filter((line) => line.startsWith("{"))
-      .map((line) => JSON.parse(line) as Line);
-
-  /** Waits for a log line whose msg starts with `prefix`. */
-  function waitForLog(prefix: string): Promise<Line> {
-    return new Promise((resolve, reject) => {
-      const check = () => {
-        const line = lines().find((l) => String(l.msg).startsWith(prefix));
-        if (line === undefined) return false;
-        clearTimeout(timer);
-        waiters.delete(wake);
-        resolve(line);
-        return true;
-      };
-      const wake = () => {
-        check();
-      };
-      const timer = setTimeout(() => {
-        waiters.delete(wake);
-        reject(
-          new Error(
-            `No "${prefix}" line in time. stdout: ${stdout} stderr: ${stderr}`,
-          ),
-        );
-      }, TIMEOUT_MS / 2);
-      if (!check()) waiters.add(wake);
-    });
-  }
-
-  /**
-   * The log line with this message. When the process exits at once, an
-   * earlier line's write can still be in flight and land after this one (the
-   * logger writes stdout asynchronously, and the exit flushes what's queued
-   * first), so it needn't be the last line.
-   */
-  const logged = (msg: string): Line | undefined =>
-    lines().find((line) => line.msg === msg);
-
-  return {
-    child,
-    exited,
-    lines,
-    logged,
-    waitForLog,
-    stdout: () => stdout,
-    stderr: () => stderr,
-  };
 }
 
 async function serverEnv(): Promise<Record<string, string>> {
@@ -166,6 +99,44 @@ describe("main.ts", { timeout: TIMEOUT_MS }, () => {
       "system.stopping",
     ]);
   });
+
+  it("resolves a relative OPS_DATA_DIR from INIT_CWD, the folder pnpm was run in", async () => {
+    const launched = await tempDir();
+    const working = await tempDir();
+    const main = run(
+      { OPS_DATA_DIR: "data", OPS_PORT: "0", INIT_CWD: launched },
+      [],
+      { cwd: working },
+    );
+    await main.waitForLog("Listening on");
+
+    main.child.kill("SIGTERM");
+
+    expect(await main.exited).toBe(0);
+    expect(existsSync(path.join(launched, "data", "ops.sqlite"))).toBe(true);
+    expect(existsSync(path.join(working, "data"))).toBe(false);
+  });
+
+  it.each([
+    ["without INIT_CWD", {}],
+    ["with an empty INIT_CWD", { INIT_CWD: "" }],
+  ])(
+    "resolves a relative OPS_DATA_DIR from its working directory %s",
+    async (_, initCwd: Record<string, string>) => {
+      const working = await tempDir();
+      const main = run(
+        { OPS_DATA_DIR: "data", OPS_PORT: "0", ...initCwd },
+        [],
+        { cwd: working },
+      );
+      await main.waitForLog("Listening on");
+
+      main.child.kill("SIGTERM");
+
+      expect(await main.exited).toBe(0);
+      expect(existsSync(path.join(working, "data", "ops.sqlite"))).toBe(true);
+    },
+  );
 
   it("exits 1 with a clear message when the port is taken", async () => {
     const taken = net.createServer();

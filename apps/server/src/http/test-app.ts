@@ -27,6 +27,7 @@ import { debugLogger, tempDir, testDatabase } from "../test-utils.ts";
 import { WsHub, type WsHubOptions } from "../ws/hub.ts";
 import { createApp } from "./app.ts";
 import type { AppDeps } from "./context.ts";
+import type { WebApp } from "./web.ts";
 
 /** Cheap scrypt settings, so logins in tests take about a millisecond. */
 export const FAST_SCRYPT: ScryptParams = { ln: 4, r: 8, p: 1 };
@@ -43,6 +44,8 @@ export type TestAppOptions = {
   backoff?: LoginBackoffOptions;
   /** The hub's limits and timings, e.g. a lower backpressure threshold. */
   hub?: Omit<WsHubOptions, "bus" | "store" | "sessions" | "logger">;
+  /** What pages get: by default, no build (503s). */
+  web?: WebApp;
 };
 
 export type Call = {
@@ -118,6 +121,7 @@ export async function testApp(options: TestAppOptions = {}) {
     backoff,
     hub,
     paths,
+    web: options.web ?? { kind: "missing", dir: "/no/web/build" },
     now,
   };
   const app = createApp(deps);

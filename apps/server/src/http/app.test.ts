@@ -7,6 +7,7 @@ import { jsonLines } from "../test-utils.ts";
 import { ERROR_STATUS } from "./errors.ts";
 import { allowedHostNames } from "./middleware/host.ts";
 import { apiError, PASSWORD, testApp } from "./test-app.ts";
+import { PAGE_CSP } from "./test-web.ts";
 
 describe("the Host check", () => {
   it.each([
@@ -198,14 +199,29 @@ describe("security headers", () => {
     expect(answer.headers.get("x-frame-options")).toBeNull();
   });
 
-  it("leave out the API's CSP and no-store outside /api", async () => {
+  it("give pages outside /api their own CSP, and leave out no-store", async () => {
     const t = await testApp();
 
-    const answer = await t.call("GET", "/elsewhere");
+    const answer = await t.call("POST", "/elsewhere");
 
+    expect(answer.status).toBe(404);
     expect(answer.headers.get("x-content-type-options")).toBe("nosniff");
-    expect(answer.headers.get("content-security-policy")).toBeNull();
+    expect(answer.headers.get("content-security-policy")).toBe(PAGE_CSP);
+    expect(answer.headers.get("x-frame-options")).toBe("DENY");
+    expect(answer.headers.get("referrer-policy")).toBe("same-origin");
     expect(answer.headers.get("cache-control")).toBeNull();
+  });
+
+  it("count /api itself as the API", async () => {
+    const t = await testApp();
+
+    const answer = await t.call("GET", "/api");
+
+    expect(answer.status).toBe(404);
+    expect(answer.headers.get("content-security-policy")).toBe(
+      "default-src 'none'; frame-ancestors 'none'",
+    );
+    expect(answer.headers.get("cache-control")).toBe("no-store");
   });
 });
 
@@ -319,7 +335,7 @@ describe("errors", () => {
     for (const [method, path] of [
       ["GET", "/api/nothing"],
       ["DELETE", "/api/auth/me"],
-      ["GET", "/"],
+      ["POST", "/"],
     ] as const) {
       const answer = await t.call(method, path);
       expect(answer.status, `${method} ${path}`).toBe(404);

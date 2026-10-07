@@ -19,7 +19,11 @@ import {
 } from "vite";
 import { describe, expect, it, onTestFinished } from "vitest";
 
-import viteConfig, { devProxy, serverUrl } from "./vite.config.ts";
+import viteConfig, {
+  devProxy,
+  LICENSE_FILE,
+  serverUrl,
+} from "./vite.config.ts";
 
 /** The names of Vite plugins, in order (plugin options nest in arrays). */
 function pluginNames(option: unknown): string[] {
@@ -69,6 +73,19 @@ describe("the Vite config", () => {
 
   it("has no proxy for a build, so OPS_PORT doesn't matter", () => {
     expect(configFor("build").server).toBeUndefined();
+  });
+
+  it("keeps the source's module order in the build, so zod-config.ts runs first", () => {
+    expect(configFor("build").build?.rolldownOptions?.output).toEqual({
+      strictExecutionOrder: true,
+    });
+  });
+
+  it("writes the bundled packages' licences to licenses.txt, which the server serves", () => {
+    expect(configFor("build").build?.license).toEqual({
+      fileName: "licenses.txt",
+    });
+    expect(LICENSE_FILE).toBe("licenses.txt");
   });
 
   it("runs the router's plugin before React's, and Tailwind's last", () => {

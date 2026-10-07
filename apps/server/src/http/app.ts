@@ -14,6 +14,7 @@ import { securityHeaders } from "./middleware/security-headers.ts";
 import { OPENAPI_PATH, openApiDocument } from "./openapi.ts";
 import { apiRoutes } from "./routes/index.ts";
 import { newRoutes } from "./validation.ts";
+import { webRoutes } from "./web.ts";
 
 // The HTTP app, without a socket: server.ts serves it with @hono/node-server,
 // which also hands it the WebSocket upgrades at /api/ws. Every request passes
@@ -22,7 +23,8 @@ import { newRoutes } from "./validation.ts";
 //   methods) → 64 KiB body limit (not uploads) → the route: session (most
 //   routes) → schema checks (400) → handler
 //
-// and every error is answered as an ApiError (errors.ts).
+// and every error is answered as an ApiError (errors.ts). GETs outside /api
+// are the web app's pages (web.ts), after every API route.
 
 export type { AppDeps, AppEnv } from "./context.ts";
 
@@ -44,5 +46,6 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
   app.get(OPENAPI_PATH, (c) => c.json(openApiDocument()));
   app.route("/", apiRoutes());
   app.route("/", wsRoutes());
+  app.route("/", webRoutes(deps.web));
   return app;
 }

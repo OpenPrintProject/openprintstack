@@ -34,6 +34,8 @@ jobs:
         run: pnpm --filter @openprintstack/server db:drift
       - run: pnpm test
       - run: pnpm build
+      - name: Start the build and check it end to end
+        run: pnpm test:smoke
 
   test-macos:
     name: Test (macOS)
