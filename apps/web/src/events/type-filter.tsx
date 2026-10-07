@@ -13,7 +13,7 @@ import {
   PopoverTrigger,
 } from "../components/ui/popover.tsx";
 import { CATEGORY_LABEL, TYPE_LABEL } from "./describe.ts";
-import { FILTER_TYPES, TYPE_GROUPS } from "./filters.ts";
+import { TYPE_GROUPS } from "./filters.ts";
 
 // The Types filter: a button that opens checkboxes grouped by category. A
 // category's box chooses or clears all its types, and shows a dash when only
@@ -28,11 +28,11 @@ export function TypeFilter({
 }) {
   const id = useId();
   const chosen = new Set(types);
-  /** The new choice, kept in the catalogue's order. */
+  /** The new choice (eventLogSearch puts it in the catalogue's order). */
   const choose = (change: (next: Set<EventType>) => void) => {
     const next = new Set(chosen);
     change(next);
-    onChange(FILTER_TYPES.filter((type) => next.has(type)));
+    onChange([...next]);
   };
   return (
     <Popover>

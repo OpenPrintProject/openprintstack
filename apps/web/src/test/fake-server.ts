@@ -116,8 +116,8 @@ export class FakeServer {
   /** While true, uploads wait for `releaseUploads()`. */
   holdUploads = false;
   readonly #heldUploads: (() => void)[] = [];
-  /** While true, events topics' snapshots wait for `releaseEventsSnapshots()`. */
-  holdEventsSnapshots = false;
+  /** These topics' snapshots wait for `releaseSnapshots()`, e.g. "events". */
+  readonly holdSnapshots = new Set<Topic["name"]>();
   readonly #heldSnapshots: (() => void)[] = [];
   /** Every event published, oldest first; an event's row id is its index + 1. */
   readonly log: OpsEvent[] = [];
@@ -230,8 +230,9 @@ export class FakeServer {
     }
   }
 
-  /** Sends the events topics' snapshots held while `holdEventsSnapshots`. */
-  releaseEventsSnapshots(): void {
+  /** Sends the snapshots held by `holdSnapshots`, and holds no more. */
+  releaseSnapshots(): void {
+    this.holdSnapshots.clear();
     for (const release of this.#heldSnapshots.splice(0)) release();
   }
 
@@ -634,7 +635,7 @@ export class FakeServer {
         socket.receive({ type: "pong" });
         return;
       case "subscribe":
-        if (message.topic.name === "events" && this.holdEventsSnapshots) {
+        if (this.holdSnapshots.has(message.topic.name)) {
           this.#heldSnapshots.push(() => {
             this.#subscribe(socket, message.topic);
           });

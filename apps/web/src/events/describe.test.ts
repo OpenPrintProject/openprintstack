@@ -251,7 +251,7 @@ describe("commandText", () => {
     ["set_speed", { multiplier: 60 }, "Set the simulation speed to ×60"],
     ["set_speed", null, "Set the simulation speed"],
     ["fault.new", {}, "simulator: fault.new"],
-  ] as const)("words the simulator's %s", (action, params, words) => {
+  ] as const)("words the simulator's %s with %j", (action, params, words) => {
     expect(
       text({
         kind: "extension.invoke",

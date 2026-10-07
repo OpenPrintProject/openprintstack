@@ -161,7 +161,7 @@ describe("the event log", () => {
 
   it("waits for the live tail's snapshot before fetching, so an event in between shows once", async () => {
     const server = serverWith();
-    server.holdEventsSnapshots = true;
+    server.holdSnapshots.add("events");
     server.publish("printer.status_changed", "p1", IDLE_TO_PRINTING);
     renderApp(server, "/events");
     await heading(LOG);
@@ -171,7 +171,7 @@ describe("the event log", () => {
     expect(server.searchesTo("GET /api/events")).toEqual([]);
 
     act(() => {
-      server.releaseEventsSnapshots();
+      server.releaseSnapshots();
       // Live, and stored before the page is fetched.
       server.publish("printer.alert", "p1", RUNOUT);
     });
@@ -181,6 +181,28 @@ describe("the event log", () => {
       "Sim 1 | Status changed · Idle → Printing · Printer state | Printer",
     ]);
     expect(server.searchesTo("GET /api/events")).toEqual([""]);
+  });
+
+  it("waits for the fleet too, so no current printer shows as deleted", async () => {
+    const server = serverWith();
+    server.holdSnapshots.add("fleet");
+    server.publish("printer.alert", "p1", RUNOUT);
+    renderApp(server, "/events");
+    await waitFor(() => {
+      expect(server.searchesTo("GET /api/events")).toEqual([""]);
+    });
+    await settle();
+
+    expect(screen.getByText("Loading events…")).toBeDefined();
+    expect(screen.queryByText("Deleted printer")).toBeNull();
+
+    act(() => {
+      server.releaseSnapshots();
+    });
+
+    await waitForRows([
+      "Sim 1 | Alert · Warning: Filament ran out · Printer state | Printer",
+    ]);
   });
 
   it("adds new events at the top as they happen, without fetching again", async () => {
@@ -423,6 +445,24 @@ describe("the event log", () => {
     expect(screen.getByLabelText<HTMLSelectElement>("Printer").value).toBe("");
   });
 
+  it("replaces the history entry on a filter change, so Back leaves the log", async () => {
+    const server = serverWith();
+    const { app, user } = renderApp(server, "/");
+    await heading("Printers");
+    await user.click(screen.getByRole("link", { name: LOG }));
+    await screen.findByText("No events yet.");
+
+    await user.selectOptions(screen.getByLabelText("Printer"), "Sim 1");
+    await user.click(screen.getByRole("switch", { name: "Include telemetry" }));
+    expect(location(app)).toBe("/events?printer=p1&telemetry=true");
+    act(() => {
+      app.router.history.back();
+    });
+
+    await heading("Printers");
+    expect(location(app)).toBe("/");
+  });
+
   it("says when there are no events, or none match", async () => {
     const server = serverWith();
     const { user } = renderApp(server, "/events");
@@ -433,7 +473,7 @@ describe("the event log", () => {
     await screen.findByText("No events match these filters.");
   });
 
-  it("names a deleted printer from its printer.removed event, and keeps it in the printer filter", async () => {
+  it("names a deleted printer from its printer.removed event, or as Deleted printer", async () => {
     const server = serverWith();
     server.publish("printer.added", "p9", {
       name: "Old",

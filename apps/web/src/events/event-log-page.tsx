@@ -264,7 +264,7 @@ function EventRow({ event, names }: { event: OpsEvent; names: LogNames }) {
 }
 
 /** The tail's events a page doesn't hold yet, then the pages' events. */
-export function logEvents(
+function logEvents(
   live: readonly OpsEvent[] | undefined,
   pages: readonly EventPage[] | undefined,
 ): OpsEvent[] {
