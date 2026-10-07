@@ -58,7 +58,9 @@ function run(env: Record<string, string>, nodeOptions: string[] = []) {
   child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
     stderr += chunk;
   });
-  const exited = once(child, "exit").then(([code]) => code as number | null);
+  // "close", not "exit": when "exit" fires, the child's stdio may still be
+  // open, with its last log lines unread (seen on CI's macOS runner).
+  const exited = once(child, "close").then(([code]) => code as number | null);
 
   const lines = (): Line[] =>
     stdout
