@@ -105,6 +105,20 @@ describe("adding a printer", () => {
     expect(server.requestsTo("POST /api/printers")).toEqual([]);
   });
 
+  it("refuses a 65-character name without sending it", async () => {
+    const server = FakeServer.withUser({ loggedIn: true });
+    const { user } = renderApp(server, "/printers/new");
+    await heading(ADD);
+
+    await user.type(await screen.findByLabelText("Name"), "x".repeat(65));
+    await submit(user, "Add printer");
+
+    expect(
+      await screen.findByText("Must be at most 64 characters."),
+    ).toBeDefined();
+    expect(server.requestsTo("POST /api/printers")).toEqual([]);
+  });
+
   it("leaves out an optional setting left empty", async () => {
     const server = FakeServer.withUser({ loggedIn: true });
     const { user } = renderApp(server, "/printers/new");
@@ -395,6 +409,30 @@ describe("editing a printer", () => {
       expect(screen.queryByText(/Settings can't change/)).toBeNull();
     },
   );
+
+  it("doesn't send a setting changed before a job started", async () => {
+    const server = editing();
+    const { user } = renderApp(server, "/printers/p1/edit");
+    await heading(EDIT);
+    await replace(user, "Speed multiplier", "2");
+
+    server.publish("printer.status_changed", "p1", {
+      previous: "idle",
+      status: "preparing",
+      detail: "Heating up",
+      error: null,
+    });
+    await waitFor(() => {
+      expect(field("Speed multiplier").disabled).toBe(true);
+    });
+    await replace(user, "Name", "Workshop");
+    await submit(user, "Save");
+
+    await heading("Print");
+    expect(server.requestsTo("PATCH /api/printers/p1")).toEqual([
+      { name: "Workshop" },
+    ]);
+  });
 
   it("locks the settings when a job starts while editing", async () => {
     const server = editing();

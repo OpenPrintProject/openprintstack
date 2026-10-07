@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Open Print Stack contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import { capabilitiesFixture } from "@openprintstack/protocol/fixtures";
 import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
@@ -28,6 +29,13 @@ describe("the printer list", () => {
         name: "Sim 10",
         status: "preparing",
         statusDetail: "Heating up",
+        capabilities: {
+          ...capabilitiesFixture,
+          heaters: [
+            ...capabilitiesFixture.heaters,
+            { id: "chamber", kind: "chamber", label: "Chamber", maxC: 60 },
+          ],
+        },
         telemetry: {
           temperatures: {
             nozzle: { actualC: 180.04, targetC: 215 },

@@ -88,6 +88,9 @@ export class FakeServer {
   /** While true, commands wait for `releaseCommands()`. */
   holdCommands = false;
   readonly #held: (() => void)[] = [];
+  /** While true, uploads wait for `releaseUploads()`. */
+  holdUploads = false;
+  readonly #heldUploads: (() => void)[] = [];
   /** The seq of the last event published. */
   #seq = 0;
 
@@ -159,6 +162,11 @@ export class FakeServer {
       }
     }
     return event;
+  }
+
+  /** Answers the uploads held while `holdUploads` was true. */
+  releaseUploads(): void {
+    for (const release of this.#heldUploads.splice(0)) release();
   }
 
   /** Answers the commands held while `holdCommands` was true. */
@@ -279,6 +287,9 @@ export class FakeServer {
         return json(200, { cameras: this.cameras.get(id) ?? [] });
     }
     if (method === "PUT" && rest.startsWith("/files/")) {
+      if (this.holdUploads) {
+        await new Promise<void>((resolve) => this.#heldUploads.push(resolve));
+      }
       return json(200, commandResult());
     }
     return undefined;

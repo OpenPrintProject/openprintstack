@@ -312,11 +312,15 @@ describe("commands", () => {
     expect(commands(server)).toEqual([{ kind: "motion.home", axes: [] }]);
   });
 
-  it("sends a double click once", async () => {
-    const { server, user } = await open();
+  it("sends two clicks in a row once, though the page hasn't re-rendered between them", async () => {
+    const { server } = await open();
     server.holdCommands = true;
+    const button = buttonIn("Motion", "Home all");
 
-    await user.dblClick(buttonIn("Motion", "Home all"));
+    act(() => {
+      button.click();
+      button.click();
+    });
     await settle();
     act(() => {
       server.releaseCommands();
@@ -326,6 +330,47 @@ describe("commands", () => {
       expect(enabled(buttonIn("Motion", "Home all"))).toBe(true);
     });
     expect(commands(server)).toHaveLength(1);
+  });
+
+  it("keeps the printer's commands while an upload runs, and takes one upload at a time", async () => {
+    const { server, user } = await open();
+    server.holdUploads = true;
+
+    await user.upload(
+      screen.getByLabelText("File to upload"),
+      new File(["G28"], "a.gcode"),
+    );
+
+    const uploading = await within(card("Files")).findByRole("button", {
+      name: "Uploading…",
+    });
+    expect(enabled(uploading)).toBe(false);
+    expect(uploading.title).toBe("An upload is running.");
+    expect(enabled(buttonIn("Motion", "Home all"))).toBe(true);
+    expect(
+      enabled(screen.getByRole("button", { name: "Print benchy.gcode" })),
+    ).toBe(true);
+
+    act(() => {
+      server.releaseUploads();
+    });
+
+    expect(await screen.findByText("Uploaded a.gcode to Sim 1.")).toBeDefined();
+    expect(enabled(buttonIn("Files", "Upload"))).toBe(true);
+  });
+
+  it("goes to the login page when a command finds the session gone", async () => {
+    const { app, server, user } = await open();
+    // The session has expired on the server.
+    server.session = null;
+    server.overrides.set("POST /api/printers/p1/commands", () =>
+      apiError(401, "unauthenticated", "Log in first."),
+    );
+
+    await user.click(buttonIn("Motion", "Home all"));
+
+    await heading("Log in to Open Print Stack");
+    expect(location(app)).toBe("/login?redirect=%2Fprinters%2Fp1");
   });
 
   it("shows a failed command's reason in a toast", async () => {
