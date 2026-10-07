@@ -8,7 +8,7 @@ import { PrinterName } from "./index.ts";
 describe("PrinterName", () => {
   it("trims and NFC-normalises", () => {
     // "e" + combining acute accent becomes "é".
-    expect(PrinterName.parse("  Café – Werkstatt  ")).toBe(
+    expect(PrinterName.parse("  Cafe\u0301 – Werkstatt  ")).toBe(
       "Café – Werkstatt",
     );
   });
@@ -25,7 +25,11 @@ describe("PrinterName", () => {
     ["empty", "", "Must not be empty."],
     ["only spaces", "   ", "Must not be empty."],
     ["65 characters", "x".repeat(65), "Must be at most 64 characters."],
-    ["a control character", "Bench\u0007", "Must not contain control characters."],
+    [
+      "a control character",
+      "Bench\u0007",
+      "Must not contain control characters.",
+    ],
     ["a newline", "Bench\nTwo", "Must not contain control characters."],
   ])("refuses a name that's %s", (_, name, message) => {
     const result = PrinterName.safeParse(name);
