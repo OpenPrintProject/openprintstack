@@ -13,6 +13,7 @@ import { Route as AuthedRouteImport } from "./routes/_authed.tsx";
 import { Route as LoginRouteImport } from "./routes/login.tsx";
 import { Route as SetupRouteImport } from "./routes/setup.tsx";
 import { Route as AuthedIndexRouteImport } from "./routes/_authed/index.tsx";
+import { Route as AuthedEventsRouteImport } from "./routes/_authed/events.tsx";
 import { Route as AuthedPrintersNewRouteImport } from "./routes/_authed/printers/new.tsx";
 import { Route as AuthedPrintersPrinterIdIndexRouteImport } from "./routes/_authed/printers/$printerId/index.tsx";
 import { Route as AuthedPrintersPrinterIdEditRouteImport } from "./routes/_authed/printers/$printerId/edit.tsx";
@@ -34,6 +35,11 @@ const SetupRoute = SetupRouteImport.update({
 const AuthedIndexRoute = AuthedIndexRouteImport.update({
   id: "/",
   path: "/",
+  getParentRoute: () => AuthedRoute,
+} as any);
+const AuthedEventsRoute = AuthedEventsRouteImport.update({
+  id: "/events",
+  path: "/events",
   getParentRoute: () => AuthedRoute,
 } as any);
 const AuthedPrintersNewRoute = AuthedPrintersNewRouteImport.update({
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   "/": typeof AuthedIndexRoute;
   "/login": typeof LoginRoute;
   "/setup": typeof SetupRoute;
+  "/events": typeof AuthedEventsRoute;
   "/printers/new": typeof AuthedPrintersNewRoute;
   "/printers/$printerId/edit": typeof AuthedPrintersPrinterIdEditRoute;
   "/printers/$printerId/": typeof AuthedPrintersPrinterIdIndexRoute;
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   "/login": typeof LoginRoute;
   "/setup": typeof SetupRoute;
+  "/events": typeof AuthedEventsRoute;
   "/": typeof AuthedIndexRoute;
   "/printers/new": typeof AuthedPrintersNewRoute;
   "/printers/$printerId/edit": typeof AuthedPrintersPrinterIdEditRoute;
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   "/_authed": typeof AuthedRouteWithChildren;
   "/login": typeof LoginRoute;
   "/setup": typeof SetupRoute;
+  "/_authed/events": typeof AuthedEventsRoute;
   "/_authed/": typeof AuthedIndexRoute;
   "/_authed/printers/new": typeof AuthedPrintersNewRoute;
   "/_authed/printers/$printerId/edit": typeof AuthedPrintersPrinterIdEditRoute;
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
     | "/"
     | "/login"
     | "/setup"
+    | "/events"
     | "/printers/new"
     | "/printers/$printerId/edit"
     | "/printers/$printerId/";
@@ -93,6 +103,7 @@ export interface FileRouteTypes {
   to:
     | "/login"
     | "/setup"
+    | "/events"
     | "/"
     | "/printers/new"
     | "/printers/$printerId/edit"
@@ -102,6 +113,7 @@ export interface FileRouteTypes {
     | "/_authed"
     | "/login"
     | "/setup"
+    | "/_authed/events"
     | "/_authed/"
     | "/_authed/printers/new"
     | "/_authed/printers/$printerId/edit"
@@ -144,6 +156,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedIndexRouteImport;
       parentRoute: typeof AuthedRoute;
     };
+    "/_authed/events": {
+      id: "/_authed/events";
+      path: "/events";
+      fullPath: "/events";
+      preLoaderRoute: typeof AuthedEventsRouteImport;
+      parentRoute: typeof AuthedRoute;
+    };
     "/_authed/printers/new": {
       id: "/_authed/printers/new";
       path: "/printers/new";
@@ -169,6 +188,7 @@ declare module "@tanstack/react-router" {
 }
 
 interface AuthedRouteChildren {
+  AuthedEventsRoute: typeof AuthedEventsRoute;
   AuthedIndexRoute: typeof AuthedIndexRoute;
   AuthedPrintersNewRoute: typeof AuthedPrintersNewRoute;
   AuthedPrintersPrinterIdEditRoute: typeof AuthedPrintersPrinterIdEditRoute;
@@ -176,6 +196,7 @@ interface AuthedRouteChildren {
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedEventsRoute: AuthedEventsRoute,
   AuthedIndexRoute: AuthedIndexRoute,
   AuthedPrintersNewRoute: AuthedPrintersNewRoute,
   AuthedPrintersPrinterIdEditRoute: AuthedPrintersPrinterIdEditRoute,

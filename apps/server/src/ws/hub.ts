@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import {
+  matchesTopic,
   type OpsEvent,
   type SessionUser,
   type Topic,
@@ -15,14 +16,14 @@ import type { SessionService } from "../auth/sessions.ts";
 import type { EventBus } from "../bus/bus.ts";
 import type { Logger } from "../logger.ts";
 import type { StateStore } from "../state/store.ts";
-import { matchesTopic } from "./topics.ts";
 
 // Every open socket at /api/ws, its user and its topics. The route (route.ts)
 // checks Host, Origin and the session before a socket gets here.
 //
 //   open         hello { bootId, user }, unless the session ended meanwhile
-//   subscribe    the topic's snapshot, then each matching event as it's
-//                published; again: a fresh snapshot
+//   subscribe    the topic's snapshot, then each event as it's published
+//                that matches it (protocol's matchesTopic); again: a fresh
+//                snapshot
 //   unsubscribe  no more events for it; unknown topics are ignored
 //   ping         pong
 //

@@ -7,19 +7,23 @@ import {
   type PrinterSnapshot,
   reducePrinterState,
   type Topic,
+  topicKey,
   type WsSnapshotOf,
 } from "@openprintstack/protocol";
 import type { QueryClient } from "@tanstack/react-query";
 
 import type { RealtimeSink, SnapshotMessage } from "./client.ts";
 
-// Live printer state in the TanStack Query cache, under keys only the
-// realtime client writes:
+// Live data in the TanStack Query cache, under keys only the realtime client
+// writes:
 //
 //   ["realtime", "fleet"]             every printer (PrinterSnapshot[], in the
 //                                     server's order; useFleet sorts it)
 //   ["realtime", "printer", <id>]     one printer, or null if there's no such
 //                                     printer (refused, or removed)
+//   ["realtime", "events", <key>]     the event log's live tail: an events
+//                                     topic's events since its first
+//                                     snapshot, newest first (key: topicKey)
 //
 // Snapshots replace the data; events are applied with protocol's
 // reducePrinterState, mirroring the server's state store:
@@ -31,19 +35,33 @@ import type { RealtimeSink, SnapshotMessage } from "./client.ts";
 //                    new name, and the store looks it up)
 //   an unknown printer: a fresh snapshot
 //
-// The events topic (the event log's live tail) has no cache yet: PR 12 adds
-// it.
+// An events topic's snapshot carries no data: it marks where the tail
+// starts, so the first one sets an empty list. A later one (after a
+// reconnect, a resync or a server restart) means events may have been missed
+// in between: the tail keeps what it has, and the event log's pages are
+// refetched over REST, where every event in the tail is stored, to fill the
+// gap. The page drops a tail event once a page holds it.
 
 export const realtimeKeys = {
   all: ["realtime"],
   fleet: ["realtime", "fleet"],
   printer: (printerId: string) => ["realtime", "printer", printerId],
+  events: (topic: Topic) => ["realtime", "events", topicKey(topic)],
 } as const;
+
+/**
+ * Where the event log's REST pages are kept (events/api.ts keeps each
+ * filtered log under it): an events topic's later snapshot refetches them.
+ */
+export const EVENT_LOG_KEY = ["events"] as const;
 
 export type FleetData = PrinterSnapshot[];
 
 /** Null: the server has no such printer. */
 export type PrinterData = PrinterSnapshot | null;
+
+/** An events topic's events since its first snapshot, newest first. */
+export type LiveEventsData = OpsEvent[];
 
 /** The fleet after `event`, or "resync" if it can't be worked out. */
 export function applyToFleet(
@@ -114,6 +132,13 @@ export function querySink(queryClient: QueryClient): RealtimeSink {
           realtimeKeys.printer(message.topic.printerId),
           message.data,
         );
+      } else if (isSnapshotOf(message, "events")) {
+        const key = realtimeKeys.events(message.topic);
+        if (queryClient.getQueryData<LiveEventsData>(key) === undefined) {
+          queryClient.setQueryData<LiveEventsData>(key, []);
+        } else {
+          void queryClient.invalidateQueries({ queryKey: EVENT_LOG_KEY });
+        }
       }
     },
     event(topic, event) {
@@ -129,7 +154,11 @@ export function querySink(queryClient: QueryClient): RealtimeSink {
             (printer) => applyToPrinter(printer, event),
           );
         case "events":
-          return "applied";
+          return update<LiveEventsData>(
+            queryClient,
+            realtimeKeys.events(topic),
+            (events) => [event, ...events],
+          );
       }
     },
     refused(topic, code) {
@@ -141,28 +170,35 @@ export function querySink(queryClient: QueryClient): RealtimeSink {
       }
     },
     dropped(topic) {
-      if (topic.name === "fleet") {
-        queryClient.removeQueries({
-          queryKey: realtimeKeys.fleet,
-          exact: true,
-        });
-      } else if (topic.name === "printer") {
-        queryClient.removeQueries({
-          queryKey: realtimeKeys.printer(topic.printerId),
-          exact: true,
-        });
-      }
+      queryClient.removeQueries({ queryKey: queryKeyOf(topic), exact: true });
     },
     reset() {
       // Reset, not removed: components on screen keep watching the same
-      // queries, and see them empty until the fresh snapshots arrive.
-      void queryClient.resetQueries({ queryKey: realtimeKeys.all });
+      // queries, and see them empty until the fresh snapshots arrive. The
+      // event log's tail is kept: its events still happened, and its fresh
+      // snapshot refetches the log's pages (see the top of the file).
+      void queryClient.resetQueries({
+        queryKey: realtimeKeys.all,
+        predicate: (query) => query.queryKey[1] !== "events",
+      });
       // Everything fetched over REST may be out of date too.
       void queryClient.invalidateQueries({
         predicate: (query) => query.queryKey[0] !== realtimeKeys.all[0],
       });
     },
   };
+}
+
+/** Where a topic's data is kept. */
+function queryKeyOf(topic: Topic): readonly unknown[] {
+  switch (topic.name) {
+    case "fleet":
+      return realtimeKeys.fleet;
+    case "printer":
+      return realtimeKeys.printer(topic.printerId);
+    case "events":
+      return realtimeKeys.events(topic);
+  }
 }
 
 /**
