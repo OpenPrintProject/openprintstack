@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@eslint/js": "catalog:",
+    "@tanstack/eslint-plugin-query": "^5.104.1",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "eslint-config-prettier": "catalog:",

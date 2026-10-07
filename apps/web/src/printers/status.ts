@@ -16,3 +16,17 @@ export const STATUS_LABEL: Record<PrinterStatus, string> = {
   cancelling: "Cancelling",
   error: "Error",
 };
+
+/** Each status after "the printer is…". */
+export const STATUS_PHRASE: Record<PrinterStatus, string> = {
+  connecting: "connecting",
+  offline: "offline",
+  idle: "idle",
+  busy: "busy",
+  preparing: "preparing",
+  printing: "printing",
+  pausing: "pausing",
+  paused: "paused",
+  cancelling: "cancelling",
+  error: "in error",
+};

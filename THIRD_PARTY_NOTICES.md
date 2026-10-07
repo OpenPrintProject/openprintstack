@@ -7,7 +7,7 @@ Dependencies installed from npm aren't listed here: each package carries its own
 ## shadcn/ui
 
 - **Files:**
-  - `apps/web/src/components/ui/*.tsx`: components added with the shadcn CLI (4.21.3, the "radix-nova" style), then formatted and given this repository's licence headers.
+  - `apps/web/src/components/ui/*.tsx`: components added with the shadcn CLI (4.21.3, the "radix-nova" style), then formatted and given this repository's licence headers. Two have one change each, described in their headers: `sonner.tsx` (the theme follows the system without `next-themes`) and `slider.tsx` (an accessible name for the thumb).
   - `apps/web/src/styles/shadcn.css`: copied from the `shadcn` package (4.21.3, `dist/tailwind.css`).
   - The theme in `apps/web/src/styles/index.css`: written by `shadcn init` (the "neutral" base colour), with dark mode moved to a media query.
 - **Source:** <https://github.com/shadcn-ui/ui>

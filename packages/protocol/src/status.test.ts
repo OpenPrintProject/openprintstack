@@ -3,7 +3,13 @@
 
 import { describe, expect, it } from "vitest";
 
-import { isOnline, ONLINE_STATUSES, PrinterStatus } from "./index.ts";
+import {
+  hasActiveJob,
+  isOnline,
+  JOB_STATUSES,
+  ONLINE_STATUSES,
+  PrinterStatus,
+} from "./index.ts";
 
 describe("PrinterStatus", () => {
   it("accepts every normalised status", () => {
@@ -27,5 +33,19 @@ describe("isOnline", () => {
   it("counts a printer in error as online", () => {
     expect(isOnline("error")).toBe(true);
     expect(ONLINE_STATUSES).toContain("error");
+  });
+});
+
+describe("JOB_STATUSES", () => {
+  it("is exactly the plan's five statuses", () => {
+    expect([...JOB_STATUSES].sort()).toEqual(
+      ["cancelling", "paused", "pausing", "preparing", "printing"].sort(),
+    );
+  });
+
+  it("is what hasActiveJob checks", () => {
+    const active = PrinterStatus.options.filter((s) => hasActiveJob(s));
+
+    expect(active).toEqual(JOB_STATUSES);
   });
 });

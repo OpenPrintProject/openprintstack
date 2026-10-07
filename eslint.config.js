@@ -4,6 +4,7 @@
 import { builtinModules } from "node:module";
 
 import js from "@eslint/js";
+import pluginQuery from "@tanstack/eslint-plugin-query";
 import { defineConfig, globalIgnores } from "eslint/config";
 import prettier from "eslint-config-prettier";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -138,6 +139,10 @@ export default defineConfig(
     files: ["apps/web/src/**"],
     ...reactHooks.configs.flat.recommended,
   },
+  ...pluginQuery.configs["flat/recommended"].map((config) => ({
+    ...config,
+    files: ["apps/web/src/**"],
+  })),
   {
     files: ["apps/web/src/**"],
     rules: {

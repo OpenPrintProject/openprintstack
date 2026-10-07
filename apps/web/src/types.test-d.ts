@@ -35,6 +35,16 @@ describe("the REST types (from openapi.json) and protocol's", () => {
     expectTypeOf<Schemas["SessionUser"]>().toEqualTypeOf<SessionUser>();
   });
 
+  it("type a file's bytes as a Blob, which a File is", () => {
+    expectTypeOf<
+      paths["/api/printers/{id}/files/{fileName}"]["put"]["requestBody"]["content"]["application/octet-stream"]
+    >().toEqualTypeOf<Blob>();
+    expectTypeOf<File>().toExtend<Blob>();
+    expectTypeOf<
+      paths["/api/printers/{id}/cameras/{cameraId}/snapshot"]["get"]["responses"][200]["content"]["image/*"]
+    >().toEqualTypeOf<Blob>();
+  });
+
   it("type the session check's answer", () => {
     expectTypeOf<
       paths["/api/auth/me"]["get"]["responses"][200]["content"]["application/json"]

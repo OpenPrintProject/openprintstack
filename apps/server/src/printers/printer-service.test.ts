@@ -26,11 +26,7 @@ import {
 import { dataPaths, ensureDataDirs, printerDir } from "../paths.ts";
 import { StateStore } from "../state/store.ts";
 import { debugLogger, settle, tempDir, testDatabase } from "../test-utils.ts";
-import {
-  JOB_STATUSES,
-  PrinterService,
-  PrinterServiceError,
-} from "./printer-service.ts";
+import { PrinterService, PrinterServiceError } from "./printer-service.ts";
 
 const USER_ID = "0199b3a0-1c00-7000-8000-00000000a001";
 const NOW = 1_000_000;
@@ -525,10 +521,6 @@ describe("PrinterService.update", () => {
       type: "printer.updated",
       payload: { changedFields: ["name", "settings"] },
     });
-  });
-
-  it("treats exactly the plan's five statuses as an active job", () => {
-    expect([...JOB_STATUSES].sort()).toEqual([...ACTIVE_JOB].sort());
   });
 
   it.each(ACTIVE_JOB)(

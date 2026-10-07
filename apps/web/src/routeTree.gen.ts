@@ -13,6 +13,9 @@ import { Route as AuthedRouteImport } from "./routes/_authed.tsx";
 import { Route as LoginRouteImport } from "./routes/login.tsx";
 import { Route as SetupRouteImport } from "./routes/setup.tsx";
 import { Route as AuthedIndexRouteImport } from "./routes/_authed/index.tsx";
+import { Route as AuthedPrintersNewRouteImport } from "./routes/_authed/printers/new.tsx";
+import { Route as AuthedPrintersPrinterIdIndexRouteImport } from "./routes/_authed/printers/$printerId/index.tsx";
+import { Route as AuthedPrintersPrinterIdEditRouteImport } from "./routes/_authed/printers/$printerId/edit.tsx";
 
 const AuthedRoute = AuthedRouteImport.update({
   id: "/_authed",
@@ -33,16 +36,39 @@ const AuthedIndexRoute = AuthedIndexRouteImport.update({
   path: "/",
   getParentRoute: () => AuthedRoute,
 } as any);
+const AuthedPrintersNewRoute = AuthedPrintersNewRouteImport.update({
+  id: "/printers/new",
+  path: "/printers/new",
+  getParentRoute: () => AuthedRoute,
+} as any);
+const AuthedPrintersPrinterIdIndexRoute =
+  AuthedPrintersPrinterIdIndexRouteImport.update({
+    id: "/printers/$printerId/",
+    path: "/printers/$printerId/",
+    getParentRoute: () => AuthedRoute,
+  } as any);
+const AuthedPrintersPrinterIdEditRoute =
+  AuthedPrintersPrinterIdEditRouteImport.update({
+    id: "/printers/$printerId/edit",
+    path: "/printers/$printerId/edit",
+    getParentRoute: () => AuthedRoute,
+  } as any);
 
 export interface FileRoutesByFullPath {
   "/": typeof AuthedIndexRoute;
   "/login": typeof LoginRoute;
   "/setup": typeof SetupRoute;
+  "/printers/new": typeof AuthedPrintersNewRoute;
+  "/printers/$printerId/edit": typeof AuthedPrintersPrinterIdEditRoute;
+  "/printers/$printerId/": typeof AuthedPrintersPrinterIdIndexRoute;
 }
 export interface FileRoutesByTo {
   "/login": typeof LoginRoute;
   "/setup": typeof SetupRoute;
   "/": typeof AuthedIndexRoute;
+  "/printers/new": typeof AuthedPrintersNewRoute;
+  "/printers/$printerId/edit": typeof AuthedPrintersPrinterIdEditRoute;
+  "/printers/$printerId": typeof AuthedPrintersPrinterIdIndexRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
@@ -50,13 +76,36 @@ export interface FileRoutesById {
   "/login": typeof LoginRoute;
   "/setup": typeof SetupRoute;
   "/_authed/": typeof AuthedIndexRoute;
+  "/_authed/printers/new": typeof AuthedPrintersNewRoute;
+  "/_authed/printers/$printerId/edit": typeof AuthedPrintersPrinterIdEditRoute;
+  "/_authed/printers/$printerId/": typeof AuthedPrintersPrinterIdIndexRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: "/" | "/login" | "/setup";
+  fullPaths:
+    | "/"
+    | "/login"
+    | "/setup"
+    | "/printers/new"
+    | "/printers/$printerId/edit"
+    | "/printers/$printerId/";
   fileRoutesByTo: FileRoutesByTo;
-  to: "/login" | "/setup" | "/";
-  id: "__root__" | "/_authed" | "/login" | "/setup" | "/_authed/";
+  to:
+    | "/login"
+    | "/setup"
+    | "/"
+    | "/printers/new"
+    | "/printers/$printerId/edit"
+    | "/printers/$printerId";
+  id:
+    | "__root__"
+    | "/_authed"
+    | "/login"
+    | "/setup"
+    | "/_authed/"
+    | "/_authed/printers/new"
+    | "/_authed/printers/$printerId/edit"
+    | "/_authed/printers/$printerId/";
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
@@ -95,15 +144,42 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedIndexRouteImport;
       parentRoute: typeof AuthedRoute;
     };
+    "/_authed/printers/new": {
+      id: "/_authed/printers/new";
+      path: "/printers/new";
+      fullPath: "/printers/new";
+      preLoaderRoute: typeof AuthedPrintersNewRouteImport;
+      parentRoute: typeof AuthedRoute;
+    };
+    "/_authed/printers/$printerId/": {
+      id: "/_authed/printers/$printerId/";
+      path: "/printers/$printerId";
+      fullPath: "/printers/$printerId/";
+      preLoaderRoute: typeof AuthedPrintersPrinterIdIndexRouteImport;
+      parentRoute: typeof AuthedRoute;
+    };
+    "/_authed/printers/$printerId/edit": {
+      id: "/_authed/printers/$printerId/edit";
+      path: "/printers/$printerId/edit";
+      fullPath: "/printers/$printerId/edit";
+      preLoaderRoute: typeof AuthedPrintersPrinterIdEditRouteImport;
+      parentRoute: typeof AuthedRoute;
+    };
   }
 }
 
 interface AuthedRouteChildren {
   AuthedIndexRoute: typeof AuthedIndexRoute;
+  AuthedPrintersNewRoute: typeof AuthedPrintersNewRoute;
+  AuthedPrintersPrinterIdEditRoute: typeof AuthedPrintersPrinterIdEditRoute;
+  AuthedPrintersPrinterIdIndexRoute: typeof AuthedPrintersPrinterIdIndexRoute;
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedIndexRoute: AuthedIndexRoute,
+  AuthedPrintersNewRoute: AuthedPrintersNewRoute,
+  AuthedPrintersPrinterIdEditRoute: AuthedPrintersPrinterIdEditRoute,
+  AuthedPrintersPrinterIdIndexRoute: AuthedPrintersPrinterIdIndexRoute,
 };
 
 const AuthedRouteWithChildren =
