@@ -324,22 +324,32 @@ describe("stop", () => {
           release = resolve;
         }),
     );
-    const answer = fetch(`${server.url}/api/printers/${printerId}/commands`, {
-      method: "POST",
-      headers: {
-        origin: server.url,
-        "content-type": "application/json",
-        cookie: `${SESSION_COOKIE}=${token}`,
+    // On a connection of its own that closes after the answer. A kept-alive
+    // one (fetch's) stays open after an answer sent while stopping, so the
+    // stop would wait for the client to close it (about 3 s).
+    const request = http.request(
+      `${server.url}/api/printers/${printerId}/commands`,
+      {
+        method: "POST",
+        headers: {
+          origin: server.url,
+          "content-type": "application/json",
+          cookie: `${SESSION_COOKIE}=${token}`,
+        },
+        agent: false,
       },
-      body: JSON.stringify({ kind: "motion.home", axes: [] }),
-    });
+    );
+    const answer = once(request, "response") as Promise<[IncomingMessage]>;
+    request.end(JSON.stringify({ kind: "motion.home", axes: [] }));
     await waitUntil(() => drivers.latest(printerId).ops().includes("home"));
 
     const stopped = server.stop();
     await settle();
     release?.();
 
-    expect((await answer).status).toBe(200);
+    const [message] = await answer;
+    message.resume();
+    expect(message.statusCode).toBe(200);
     await stopped;
     expect(storedEvents(config.dataDir).slice(-4)).toEqual([
       "command.requested",
