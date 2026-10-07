@@ -324,9 +324,8 @@ describe("stop", () => {
           release = resolve;
         }),
     );
-    // On a connection of its own that closes after the answer. A kept-alive
-    // one (fetch's) stays open after an answer sent while stopping, so the
-    // stop would wait for the client to close it (about 3 s).
+    // On a connection of its own that closes after the answer, so only the
+    // order is checked here; a kept-alive one has a test of its own below.
     const request = http.request(
       `${server.url}/api/printers/${printerId}/commands`,
       {
@@ -369,6 +368,63 @@ describe("stop", () => {
 
     // Node's keep-alive timeout is 5 s; closing waits for none of it.
     expect(performance.now() - started).toBeLessThan(3000);
+  });
+
+  it("closes each kept-alive connection as soon as its request in flight is answered", async () => {
+    const config = await testConfig();
+    const first = storePrinter(config.dataDir, "First");
+    const second = storePrinter(config.dataDir, "Second");
+    const { server, drivers } = await start(config);
+    const token = await setupAdmin(server);
+    const release = new Map<string, () => void>();
+    for (const printerId of [first, second]) {
+      drivers.latest(printerId).handle(
+        "home",
+        () =>
+          new Promise<void>((resolve) => {
+            release.set(printerId, resolve);
+          }),
+      );
+    }
+    // fetch keeps its connections open for reuse, as a browser does, and
+    // sends two requests at once on two of them.
+    const home = (printerId: string) =>
+      fetch(`${server.url}/api/printers/${printerId}/commands`, {
+        method: "POST",
+        headers: {
+          origin: server.url,
+          "content-type": "application/json",
+          cookie: `${SESSION_COOKIE}=${token}`,
+        },
+        body: JSON.stringify({ kind: "motion.home", axes: [] }),
+      });
+    const firstAnswer = home(first);
+    const secondAnswer = home(second);
+    await waitUntil(() =>
+      [first, second].every((id) => drivers.latest(id).ops().includes("home")),
+    );
+
+    const stopped = server.stop();
+    await settle();
+    release.get(first)?.();
+    const firstResponse = await firstAnswer;
+    await firstResponse.text();
+    expect(firstResponse.status).toBe(200);
+    // The second is still in flight: closing the first connection mustn't
+    // cut it.
+    release.get(second)?.();
+    const response = await secondAnswer;
+    await response.text();
+    const answered = performance.now();
+    expect(response.status).toBe(200);
+    // The answer offers to keep the connection open, so it's the server that
+    // has to close it.
+    expect(response.headers.get("connection")).toBe("keep-alive");
+    await stopped;
+
+    // fetch itself would close it after about 3 s (the answer's
+    // `Keep-Alive: timeout=5` less its 2 s margin).
+    expect(performance.now() - answered).toBeLessThan(1000);
   });
 
   it("returns the same promise when called again", async () => {
@@ -559,9 +615,7 @@ describe("HTTP over a real socket", () => {
 describe("the web app", () => {
   /**
    * GETs a path exactly as given, without a client tidying it first, on a
-   * connection of its own that closes after the answer. (@hono/node-server
-   * finishes a file's response a tick after its last byte is sent, so a stop
-   * straight after a kept-alive one waits for the client to close it.)
+   * connection of its own that closes after the answer.
    */
   function rawGet(
     port: number,
