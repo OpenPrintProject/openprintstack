@@ -163,7 +163,8 @@ export async function startServer(
       payload: {},
     });
     const httpClosed = new Promise<void>((resolve) => {
-      // It waits for open connections, sockets included, to end.
+      // It waits for open connections, sockets included, to end. Each HTTP
+      // one ends as soon as it's answered (closeWhenAnswered).
       server.close(() => {
         resolve();
       });
@@ -230,7 +231,8 @@ function logWebApp(log: Logger, web: WebApp): void {
 /**
  * The HTTP server for the app: WebSocket upgrades go to the app too (so its
  * Host check and the /api/ws route see them), with `ws` doing the WebSocket
- * protocol, and `Expect: 100-continue` waits for the body to be read.
+ * protocol, `Expect: 100-continue` waits for the body to be read, and once
+ * it's closing, each connection is closed as soon as it's answered.
  */
 export function createHttpServer(app: {
   fetch: Parameters<typeof createAdaptorServer>[0]["fetch"];
@@ -246,7 +248,27 @@ export function createHttpServer(app: {
     // Without createServer options it's always an HTTP/1.1 server.
   }) as Server;
   server.on("checkContinue", continueOnRead(server));
+  server.on("request", closeWhenAnswered(server));
   return server;
+}
+
+/**
+ * Closes a connection as soon as its answer is sent, once the server is
+ * closing. `close()` ends idle connections at once, but not one with a
+ * request in flight. Node still answers that request with `Connection:
+ * keep-alive`, so the connection would then stay open until the client
+ * closed it or Node's keep-alive timeout did: about 3 s for fetch, 6 s for a
+ * node:http Agent. The same goes for a file whose last byte was sent just
+ * before close(): @hono/node-server finishes its answer a tick later.
+ */
+function closeWhenAnswered(server: Server): RequestListener {
+  return (_request: IncomingMessage, response: ServerResponse) => {
+    response.once("finish", () => {
+      // `listening` is false from the moment close() is called. This ends
+      // only connections with nothing in flight, so other requests carry on.
+      if (!server.listening) server.closeIdleConnections();
+    });
+  };
 }
 
 /** Listens and resolves with the port, or rejects with a ListenError. */

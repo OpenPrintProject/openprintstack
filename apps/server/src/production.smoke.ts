@@ -69,10 +69,7 @@ async function listening() {
 
 type Answer = { status: number; headers: IncomingHttpHeaders; body: string };
 
-/**
- * Sends a request on a connection of its own, closed after the answer, so
- * stopping the server never waits on a kept-alive one.
- */
+/** Sends a request on a connection of its own, closed after the answer. */
 function send(
   url: string,
   options: {
