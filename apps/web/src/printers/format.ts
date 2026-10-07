@@ -70,3 +70,13 @@ const dateTime = new Intl.DateTimeFormat("en-GB", {
 export function formatDateTime(iso: string | null): string {
   return iso === null ? NOT_REPORTED : dateTime.format(new Date(iso));
 }
+
+const dateTimeSeconds = new Intl.DateTimeFormat("en-GB", {
+  dateStyle: "medium",
+  timeStyle: "medium",
+});
+
+/** "7 Oct 2026, 14:05:32" in the browser's time zone. */
+export function formatDateTimeSeconds(iso: string): string {
+  return dateTimeSeconds.format(new Date(iso));
+}

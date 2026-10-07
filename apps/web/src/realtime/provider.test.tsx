@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Open Print Stack contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import type { Topic } from "@openprintstack/protocol";
 import { BOOT_ID, USER_ID } from "@openprintstack/protocol/fixtures";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen } from "@testing-library/react";
@@ -13,10 +14,12 @@ import {
   eventOf,
   printerSnapshot,
 } from "../test/fake-socket.ts";
+import { realtimeKeys } from "./cache.ts";
 import {
   RealtimeProvider,
   useConnectionStatus,
   useFleet,
+  useLiveEvents,
   usePrinter,
   useRealtime,
   useRealtimeEvents,
@@ -399,6 +402,100 @@ describe("usePrinter", () => {
         topic: { name: "printer", printerId: "printer-1" },
       },
     ]);
+  });
+});
+
+describe("useLiveEvents", () => {
+  const ALERTS: Topic = { name: "events", types: ["printer.alert"] };
+
+  function Tail() {
+    const events = useLiveEvents(ALERTS);
+    if (events === undefined) return <p>Waiting for the tail</p>;
+    return <p>Tail: {events.map((event) => event.seq).join(", ") || "none"}</p>;
+  }
+
+  it("subscribes the topic: undefined until its snapshot, then its events newest first", async () => {
+    const { sockets, queryClient } = setup(
+      <Toggle>
+        <Tail />
+      </Toggle>,
+    );
+    await connect(sockets.last);
+
+    expect(sockets.last.sent).toEqual([{ type: "subscribe", topic: ALERTS }]);
+    expect(screen.getByText("Waiting for the tail")).toBeDefined();
+    await server(() => {
+      sockets.last.receive({
+        type: "snapshot",
+        topic: ALERTS,
+        seq: 20,
+        data: null,
+      });
+    });
+    expect(screen.getByText("Tail: none")).toBeDefined();
+    await server(() => {
+      for (const seq of [21, 22]) {
+        sockets.last.receive({
+          type: "event",
+          topic: ALERTS,
+          event: eventOf("printer.alert", seq),
+        });
+      }
+    });
+    expect(screen.getByText("Tail: 22, 21")).toBeDefined();
+
+    act(() => {
+      screen.getByText("Toggle").click();
+    });
+    await act(async () => {});
+    expect(sockets.last.sent.at(-1)).toEqual({
+      type: "unsubscribe",
+      topic: ALERTS,
+    });
+    expect(
+      queryClient.getQueryData(realtimeKeys.events(ALERTS)),
+    ).toBeUndefined();
+  });
+
+  it("keeps its events through a server restart", async () => {
+    const { sockets } = setup(<Tail />);
+    await connect(sockets.last);
+    await server(() => {
+      sockets.last.receive({
+        type: "snapshot",
+        topic: ALERTS,
+        seq: 20,
+        data: null,
+      });
+      sockets.last.receive({
+        type: "event",
+        topic: ALERTS,
+        event: eventOf("printer.alert", 21),
+      });
+    });
+
+    await server(() => {
+      sockets.last.drop();
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    await connect(sockets.last, OTHER_BOOT);
+    await server(() => {
+      sockets.last.receive({
+        type: "snapshot",
+        topic: ALERTS,
+        seq: 2,
+        data: null,
+      });
+      sockets.last.receive({
+        type: "event",
+        topic: ALERTS,
+        event: eventOf("printer.alert", 3),
+      });
+    });
+
+    expect(screen.getByText("Tail: 3, 21")).toBeDefined();
   });
 });
 

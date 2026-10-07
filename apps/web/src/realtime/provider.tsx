@@ -20,6 +20,7 @@ import {
 
 import {
   type FleetData,
+  type LiveEventsData,
   type PrinterData,
   querySink,
   realtimeKeys,
@@ -133,6 +134,20 @@ export function usePrinter(printerId: string): PrinterData | undefined {
   useTopic(topic);
   return useQuery<PrinterData>({
     queryKey: realtimeKeys.printer(printerId),
+    queryFn: skipToken,
+  }).data;
+}
+
+/**
+ * The event log's live tail: an events topic's events since its snapshot,
+ * newest first; undefined until the snapshot, which marks where the tail
+ * starts. Pass the same topic object for as long as it means the same topic
+ * (useMemo).
+ */
+export function useLiveEvents(topic: Topic): LiveEventsData | undefined {
+  useTopic(topic);
+  return useQuery<LiveEventsData>({
+    queryKey: realtimeKeys.events(topic),
     queryFn: skipToken,
   }).data;
 }

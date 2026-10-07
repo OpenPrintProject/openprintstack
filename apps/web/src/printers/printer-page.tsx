@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { Link } from "@tanstack/react-router";
-import { ArrowLeftIcon, PencilIcon } from "lucide-react";
+import { ArrowLeftIcon, PencilIcon, ScrollTextIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { Button } from "../components/ui/button.tsx";
+import { eventLogSearch } from "../events/filters.ts";
 import { usePrinter } from "../realtime/provider.tsx";
 import { CameraCard } from "./detail/camera-card.tsx";
 import { DeletePrinter } from "./detail/delete-printer.tsx";
@@ -58,7 +59,13 @@ export function PrinterPage({ printerId }: { printerId: string }) {
           <h1 className="font-heading text-xl font-semibold">{printer.name}</h1>
           <PrinterStatusBadge state={state} />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" asChild>
+            <Link to="/events" search={eventLogSearch({ printerId })}>
+              <ScrollTextIcon data-icon="inline-start" />
+              Event log
+            </Link>
+          </Button>
           <Button variant="outline" asChild>
             <Link to="/printers/$printerId/edit" params={{ printerId }}>
               <PencilIcon data-icon="inline-start" />

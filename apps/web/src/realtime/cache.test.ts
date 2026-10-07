@@ -6,16 +6,20 @@ import {
   initialPrinterState,
   type PrinterSnapshot,
   reducePrinterState,
+  type Topic,
 } from "@openprintstack/protocol";
 import { telemetryFixture, TS } from "@openprintstack/protocol/fixtures";
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
+import { eventLogKeys } from "../events/api.ts";
+import { NO_FILTERS } from "../events/filters.ts";
 import { eventOf, printerSnapshot } from "../test/fake-socket.ts";
 import {
   applyToFleet,
   applyToPrinter,
   type FleetData,
+  type LiveEventsData,
   type PrinterData,
   querySink,
   realtimeKeys,
@@ -208,19 +212,80 @@ describe("querySink", () => {
     ).toBe("resync");
   });
 
-  it("leaves the cache alone for the events topic", () => {
+  it("keeps an events topic's events from its snapshot, newest first", () => {
     const { queryClient, sink } = setup();
+    const topic = { name: "events" } as const;
+    const alerts: Topic = { name: "events", types: ["printer.alert"] };
+    const logout = eventOf("auth.logout", 12);
+    const alert = eventOf("printer.alert", 13);
+
+    sink.snapshot({ type: "snapshot", topic, seq: 11, data: null });
+    expect(queryClient.getQueryData(realtimeKeys.events(topic))).toEqual([]);
+    sink.snapshot({ type: "snapshot", topic: alerts, seq: 12, data: null });
+
+    expect(sink.event(topic, logout)).toBe("applied");
+    expect(sink.event(topic, alert)).toBe("applied");
+    expect(sink.event(alerts, alert)).toBe("applied");
+    expect(
+      queryClient.getQueryData<LiveEventsData>(realtimeKeys.events(topic)),
+    ).toEqual([alert, logout]);
+    expect(
+      queryClient.getQueryData<LiveEventsData>(realtimeKeys.events(alerts)),
+    ).toEqual([alert]);
+    // Topics that mean the same share their events.
+    expect(
+      realtimeKeys.events({
+        name: "events",
+        types: ["printer.alert", "printer.alert"],
+        includeTelemetry: false,
+      }),
+    ).toEqual(realtimeKeys.events(alerts));
+  });
+
+  it("asks for an events topic's snapshot if it has none", () => {
+    const { sink } = setup();
+
+    expect(sink.event({ name: "events" }, eventOf("auth.logout", 12))).toBe(
+      "resync",
+    );
+  });
+
+  it("on an events topic's later snapshot, keeps its events and refetches the event log's pages", () => {
+    const { queryClient, sink } = setup();
+    const topic = { name: "events" } as const;
+    const logout = eventOf("auth.logout", 12);
+    sink.snapshot({ type: "snapshot", topic, seq: 11, data: null });
+    sink.event(topic, logout);
+    queryClient.setQueryData(eventLogKeys.list(NO_FILTERS), { pages: [] });
+    queryClient.setQueryData(["get", "/api/printers"], { printers: [] });
+
+    sink.snapshot({ type: "snapshot", topic, seq: 20, data: null });
+
+    expect(queryClient.getQueryData(realtimeKeys.events(topic))).toEqual([
+      logout,
+    ]);
+    expect(
+      queryClient.getQueryState(eventLogKeys.list(NO_FILTERS))?.isInvalidated,
+    ).toBe(true);
+    expect(
+      queryClient.getQueryState(["get", "/api/printers"])?.isInvalidated,
+    ).toBe(false);
+  });
+
+  it("doesn't refetch the event log on an events topic's first snapshot", () => {
+    const { queryClient, sink } = setup();
+    queryClient.setQueryData(eventLogKeys.list(NO_FILTERS), { pages: [] });
 
     sink.snapshot({
       type: "snapshot",
-      topic: { name: "events" },
+      topic: { name: "events", printerId: "printer-1" },
       seq: 11,
       data: null,
     });
-    const answer = sink.event({ name: "events" }, eventOf("auth.logout", 12));
 
-    expect(answer).toBe("applied");
-    expect(queryClient.getQueryCache().getAll()).toEqual([]);
+    expect(
+      queryClient.getQueryState(eventLogKeys.list(NO_FILTERS))?.isInvalidated,
+    ).toBe(false);
   });
 
   it("records a printer the server doesn't have as null", () => {
@@ -239,6 +304,7 @@ describe("querySink", () => {
   it("forgets a dropped topic's data", () => {
     const { queryClient, sink } = setup();
     const topic = { name: "printer", printerId: "printer-1" } as const;
+    const events = { name: "events" } as const;
     sink.snapshot({
       type: "snapshot",
       topic: { name: "fleet" },
@@ -246,6 +312,11 @@ describe("querySink", () => {
       data: [ONE],
     });
     sink.snapshot({ type: "snapshot", topic, seq: 11, data: ONE });
+    sink.snapshot({ type: "snapshot", topic: events, seq: 11, data: null });
+    sink.dropped(events);
+    expect(
+      queryClient.getQueryData(realtimeKeys.events(events)),
+    ).toBeUndefined();
 
     sink.dropped({ name: "fleet" });
 
@@ -259,21 +330,28 @@ describe("querySink", () => {
     ).toBeUndefined();
   });
 
-  it("on reset, empties the realtime data and marks every REST answer stale", () => {
+  it("on reset, empties the realtime data but the event log's tail, and marks every REST answer stale", () => {
     const { queryClient, sink } = setup();
     const snapshot: PrinterSnapshot = ONE;
+    const events = { name: "events" } as const;
+    const logout = eventOf("auth.logout", 12);
     sink.snapshot({
       type: "snapshot",
       topic: { name: "fleet" },
       seq: 11,
       data: [snapshot],
     });
+    sink.snapshot({ type: "snapshot", topic: events, seq: 11, data: null });
+    sink.event(events, logout);
     queryClient.setQueryData(["get", "/api/printers"], {
       printers: [snapshot],
     });
 
     sink.reset();
 
+    expect(queryClient.getQueryData(realtimeKeys.events(events))).toEqual([
+      logout,
+    ]);
     expect(queryClient.getQueryData(realtimeKeys.fleet)).toBeUndefined();
     expect(
       queryClient.getQueryCache().find({ queryKey: realtimeKeys.fleet }),

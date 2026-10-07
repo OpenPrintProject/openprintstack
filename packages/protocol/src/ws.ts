@@ -56,6 +56,41 @@ export function topicKey(topic: Topic): string {
   }
 }
 
+/**
+ * Whether `event` belongs on `topic`: the rule the server's hub sends events
+ * by (and the web app's tests' fake hub).
+ *
+ *   fleet        every event about a printer (printerId isn't null)
+ *   printer:<id> every event about that printer
+ *   events       every event, narrowed by its filters: printerId, types, and
+ *                telemetry left out unless includeTelemetry is true or types
+ *                names printer.telemetry (the rules of GET /api/events)
+ */
+export function matchesTopic(topic: Topic, event: OpsEvent): boolean {
+  switch (topic.name) {
+    case "fleet":
+      return event.printerId !== null;
+    case "printer":
+      return event.printerId === topic.printerId;
+    case "events": {
+      if (
+        topic.printerId !== undefined &&
+        event.printerId !== topic.printerId
+      ) {
+        return false;
+      }
+      const types = topic.types ?? [];
+      if (types.length > 0 && !types.includes(event.type)) return false;
+      if (event.category === "telemetry") {
+        return (
+          topic.includeTelemetry === true || types.includes("printer.telemetry")
+        );
+      }
+      return true;
+    }
+  }
+}
+
 // Client → server
 
 export const WsClientMessage = z

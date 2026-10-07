@@ -4,15 +4,20 @@
 import {
   ApiError,
   type Camera,
+  EventCategory,
+  EventType,
+  matchesTopic,
   NewPassword,
   normalizePassword,
   OpsEvent,
   type OpsEventOf,
+  type PrinterCommand,
   type PrinterFile,
   type PrinterSnapshot,
   reducePrinterState,
   SessionUser,
   Topic,
+  topicKey,
   Username,
   type WsClientMessage,
 } from "@openprintstack/protocol";
@@ -38,15 +43,30 @@ import { SIMULATED_DEFAULTS, SIMULATED_DRIVER_TYPE } from "./fixtures.ts";
 //
 // The printers' routes record each request and answer as the server does
 // when all goes well: driver types, add, config, rename and settings, delete,
-// files, cameras, uploads, commands and the simulator's. A test that wants
-// the server to refuse something sets an override; the server's own checks
-// are tested in the server. `publish` plays the printer: it sends an event to
-// every topic the page has subscribed that it belongs on, as the hub does.
+// files, cameras, uploads, commands and the simulator's (a command publishes
+// command.requested and command.result, by the session's user, as the
+// server's do). A test that wants the server to refuse something sets an
+// override; the server's own checks are tested in the server.
+//
+// `publish` plays the printer, and `publishGlobal` the server: the event is
+// stored in the event log and goes to every topic the page has subscribed
+// that it belongs on (protocol's matchesTopic, as the hub does), from the
+// topic's snapshot on. Published before the page opens, it's history. GET /api/events pages the log as the
+// server does: newest first, its filters, `before` cursors and the users map.
+// Unlike the server, it stores every telemetry event.
 
 export type DriverType = components["schemas"]["DriverType"];
 
 /** The events about one printer. */
 export type PrinterEventType = Extract<OpsEvent, { printerId: string }>["type"];
+
+/** The events about no printer (auth and system). */
+export type GlobalEventType = Extract<OpsEvent, { printerId: null }>["type"];
+
+/** What a test can set of a published event's envelope. */
+export type Envelope = Partial<
+  Pick<OpsEvent, "source" | "correlationId" | "ts">
+>;
 export type PrinterConfig = components["schemas"]["PrinterConfig"];
 
 export type FakeUser = SessionUser & { password: string };
@@ -62,8 +82,13 @@ const OPEN = 1;
 
 export class FakeServer {
   readonly sockets = new FakeSockets();
-  /** Every REST request, in order. */
-  readonly requests: { method: string; path: string; body: unknown }[] = [];
+  /** Every REST request, in order; `search` is the query string, without "?". */
+  readonly requests: {
+    method: string;
+    path: string;
+    search: string;
+    body: unknown;
+  }[] = [];
   users: FakeUser[] = [];
   /** Who the page's session belongs to, if it has one. */
   session: SessionUser | null = null;
@@ -91,8 +116,17 @@ export class FakeServer {
   /** While true, uploads wait for `releaseUploads()`. */
   holdUploads = false;
   readonly #heldUploads: (() => void)[] = [];
+  /** While true, events topics' snapshots wait for `releaseEventsSnapshots()`. */
+  holdEventsSnapshots = false;
+  readonly #heldSnapshots: (() => void)[] = [];
+  /** Every event published, oldest first; an event's row id is its index + 1. */
+  readonly log: OpsEvent[] = [];
+  /** Each socket's topics that have had their snapshot, by topicKey. */
+  readonly #topics = new WeakMap<FakeWebSocket, Map<string, Topic>>();
   /** The seq of the last event published. */
   #seq = 0;
+  /** Commands run so far, for their ids. */
+  #commands = 0;
 
   /** A server with rob as its admin, logged in or not. */
   static withUser(options: { loggedIn?: boolean } = {}): FakeServer {
@@ -128,12 +162,46 @@ export class FakeServer {
 
   /**
    * Publishes an event about a printer, as the bus would: it changes the
-   * printer's state, and goes to every open socket's topics it belongs on.
+   * printer's state, is stored, and goes to every open socket's topics it
+   * belongs on.
    */
   publish<T extends PrinterEventType>(
     type: T,
     printerId: string,
     payload: OpsEventOf<T>["payload"],
+    envelope: Envelope = {},
+  ): OpsEventOf<T> {
+    const event = this.#event(type, printerId, payload, envelope);
+    this.printers = this.printers.map((each) =>
+      each.printer.id === printerId
+        ? {
+            ...each,
+            state: reducePrinterState(each.state, event),
+            seq: event.seq,
+          }
+        : each,
+    );
+    this.#send(event);
+    return event as OpsEventOf<T>;
+  }
+
+  /** Publishes an event about no printer (auth or system). */
+  publishGlobal<T extends GlobalEventType>(
+    type: T,
+    payload: OpsEventOf<T>["payload"],
+    envelope: Envelope = {},
+  ): OpsEventOf<T> {
+    const event = this.#event(type, null, payload, envelope);
+    this.#send(event);
+    return event as OpsEventOf<T>;
+  }
+
+  /** A new event, stored in the log. */
+  #event<T extends EventType>(
+    type: T,
+    printerId: string | null,
+    payload: OpsEventOf<T>["payload"],
+    envelope: Envelope,
   ): OpsEvent {
     const seq = this.#nextSeq();
     // Checked, as the bus checks events in dev and test.
@@ -141,27 +209,30 @@ export class FakeServer {
       ...eventFixtures[type],
       id: eventId(seq),
       seq,
+      bootId: this.bootId,
       printerId,
       payload,
+      ...envelope,
     });
-    this.printers = this.printers.map((each) =>
-      each.printer.id === printerId
-        ? { ...each, state: reducePrinterState(each.state, event), seq }
-        : each,
-    );
+    this.log.push(event);
+    return event;
+  }
+
+  /** Sends an event to every open socket's topics it belongs on. */
+  #send(event: OpsEvent): void {
     for (const socket of this.sockets.all) {
       if (socket.readyState !== OPEN) continue;
-      for (const key of socket.topics()) {
-        const topic = Topic.parse(JSON.parse(key));
-        if (
-          topic.name === "fleet" ||
-          (topic.name === "printer" && topic.printerId === printerId)
-        ) {
+      for (const topic of this.#topics.get(socket)?.values() ?? []) {
+        if (matchesTopic(topic, event)) {
           socket.receive({ type: "event", topic, event });
         }
       }
     }
-    return event;
+  }
+
+  /** Sends the events topics' snapshots held while `holdEventsSnapshots`. */
+  releaseEventsSnapshots(): void {
+    for (const release of this.#heldSnapshots.splice(0)) release();
   }
 
   /** Answers the uploads held while `holdUploads` was true. */
@@ -181,12 +252,20 @@ export class FakeServer {
       .map((request) => request.body);
   }
 
+  /** The query strings sent to one route, e.g. "GET /api/events". */
+  searchesTo(route: string): string[] {
+    return this.requests
+      .filter((request) => `${request.method} ${request.path}` === route)
+      .map((request) => request.search);
+  }
+
   readonly fetch = async (
     input: RequestInfo | URL,
     init?: RequestInit,
   ): Promise<Response> => {
     const request = new Request(input, init);
-    const path = new URL(request.url).pathname;
+    const url = new URL(request.url);
+    const path = url.pathname;
     const text = await request.text();
     const type = request.headers.get("content-type");
     // A file's bytes are recorded as they came, with their type.
@@ -196,7 +275,12 @@ export class FakeServer {
         : type === "application/json"
           ? JSON.parse(text)
           : { contentType: type, text };
-    this.requests.push({ method: request.method, path, body });
+    this.requests.push({
+      method: request.method,
+      path,
+      search: url.search.slice(1),
+      body,
+    });
     if (this.mode === "network") throw new TypeError("Failed to fetch");
     if (this.mode === "proxy") {
       return new Response(null, {
@@ -220,6 +304,8 @@ export class FakeServer {
         return json(200, { driverTypes: this.driverTypes });
       case "POST /api/printers":
         return this.#add(body);
+      case "GET /api/events":
+        return this.#events(url.searchParams);
     }
     return (
       (await this.#printerRoute(request.method, path, body)) ??
@@ -267,10 +353,15 @@ export class FakeServer {
     }
     if (rest === "/commands" || rest.startsWith("/simulator/")) {
       if (method !== "POST") return undefined;
-      if (this.holdCommands) {
-        await new Promise<void>((resolve) => this.#held.push(resolve));
-      }
-      return json(200, commandResult());
+      const command =
+        rest === "/commands"
+          ? (body as PrinterCommand)
+          : simulatorCommand(rest, body);
+      return this.#command(id, command, async () => {
+        if (this.holdCommands) {
+          await new Promise<void>((resolve) => this.#held.push(resolve));
+        }
+      });
     }
     switch (`${method} ${rest}`) {
       case "GET /config":
@@ -287,12 +378,101 @@ export class FakeServer {
         return json(200, { cameras: this.cameras.get(id) ?? [] });
     }
     if (method === "PUT" && rest.startsWith("/files/")) {
-      if (this.holdUploads) {
-        await new Promise<void>((resolve) => this.#heldUploads.push(resolve));
-      }
-      return json(200, commandResult());
+      const text = typeof body === "object" && body !== null && "text" in body;
+      const command: PrinterCommand = {
+        kind: "file.upload",
+        stagedFileId: eventId(0xf000 + this.#commands),
+        fileName: decodeURIComponent(rest.slice("/files/".length)),
+        sizeBytes: text
+          ? new TextEncoder().encode(String(body.text)).length
+          : 0,
+      };
+      return this.#command(id, command, async () => {
+        if (this.holdUploads) {
+          await new Promise<void>((resolve) => this.#heldUploads.push(resolve));
+        }
+      });
     }
     return undefined;
+  }
+
+  /**
+   * Runs a command as the server does when all goes well: command.requested,
+   * then (after `wait`) command.result, both by the session's user.
+   */
+  async #command(
+    printerId: string,
+    command: PrinterCommand,
+    wait: () => Promise<void>,
+  ): Promise<Response> {
+    this.#commands += 1;
+    const commandId = eventId(0xc000 + this.#commands);
+    const envelope: Envelope = {
+      correlationId: commandId,
+      source:
+        this.session === null
+          ? { kind: "system" }
+          : { kind: "user", userId: this.session.id },
+    };
+    this.publish(
+      "command.requested",
+      printerId,
+      { commandId, command },
+      envelope,
+    );
+    await wait();
+    const result = { commandId, ok: true, durationMs: 1 };
+    this.publish("command.result", printerId, result, envelope);
+    return json(200, result);
+  }
+
+  /** GET /api/events: a page of the log, as the server answers it. */
+  #events(search: URLSearchParams): Response {
+    const query = EventsQuery.safeParse({
+      printerId: search.get("printerId") ?? undefined,
+      type: search.getAll("type"),
+      category: search.getAll("category"),
+      includeTelemetry: search.get("includeTelemetry") ?? undefined,
+      before: search.get("before") ?? undefined,
+      limit: search.get("limit") ?? undefined,
+    });
+    if (!query.success) {
+      return apiError(400, "validation_failed", "The request isn't valid.");
+    }
+    const { printerId, type, category, includeTelemetry, before, limit } =
+      query.data;
+    const namesTelemetry =
+      type.includes("printer.telemetry") || category.includes("telemetry");
+    const rows = this.log
+      .map((event, index) => ({ event, rowId: index + 1 }))
+      .filter(
+        ({ event, rowId }) =>
+          (printerId === undefined || event.printerId === printerId) &&
+          (type.length === 0 || type.includes(event.type)) &&
+          (category.length === 0 || category.includes(event.category)) &&
+          (includeTelemetry === "true" ||
+            namesTelemetry ||
+            event.category !== "telemetry") &&
+          (before === undefined || rowId < before),
+      )
+      .reverse();
+    const page = rows.slice(0, limit);
+    const events = page.map((row) => row.event);
+    const users = Object.fromEntries(
+      this.users
+        .filter((user) =>
+          events.some(
+            (event) =>
+              event.source.kind === "user" && event.source.userId === user.id,
+          ),
+        )
+        .map((user) => [user.id, user.username]),
+    );
+    return json(200, {
+      events,
+      nextCursor: rows.length > limit ? (page.at(-1)?.rowId ?? null) : null,
+      users,
+    });
   }
 
   #add(body: unknown): Response {
@@ -361,6 +541,10 @@ export class FakeServer {
     return json(200, updated);
   }
 
+  #exists(printerId: string): boolean {
+    return this.printers.some((each) => each.printer.id === printerId);
+  }
+
   #nameTaken(name: string): boolean {
     return [...this.configs.values()].some(
       (each) => each.name.toLowerCase() === name.toLowerCase(),
@@ -368,9 +552,13 @@ export class FakeServer {
   }
 
   #nextSeq(): number {
-    this.#seq =
-      Math.max(this.#seq, ...this.printers.map((each) => each.seq)) + 1;
+    this.#seq = this.#currentSeq() + 1;
     return this.#seq;
+  }
+
+  /** The seq of the newest event or snapshot. */
+  #currentSeq(): number {
+    return Math.max(this.#seq, ...this.printers.map((each) => each.seq));
   }
 
   #me(): Response {
@@ -446,18 +634,29 @@ export class FakeServer {
         socket.receive({ type: "pong" });
         return;
       case "subscribe":
-        this.#subscribe(socket, message.topic);
+        if (message.topic.name === "events" && this.holdEventsSnapshots) {
+          this.#heldSnapshots.push(() => {
+            this.#subscribe(socket, message.topic);
+          });
+        } else {
+          this.#subscribe(socket, message.topic);
+        }
         return;
       case "unsubscribe":
+        this.#topics.get(socket)?.delete(topicKey(message.topic));
         return;
     }
   }
 
+  /** The topic's snapshot, from which its events follow (as the hub does). */
   #subscribe(socket: FakeWebSocket, topic: Topic): void {
-    const seq = Math.max(
-      this.#seq,
-      ...this.printers.map((printer) => printer.seq),
-    );
+    if (socket.readyState !== OPEN) return;
+    const seq = this.#currentSeq();
+    if (topic.name !== "printer" || this.#exists(topic.printerId)) {
+      const topics = this.#topics.get(socket) ?? new Map<string, Topic>();
+      topics.set(topicKey(topic), topic);
+      this.#topics.set(socket, topics);
+    }
     switch (topic.name) {
       case "fleet":
         socket.receive({ type: "snapshot", topic, seq, data: this.printers });
@@ -485,11 +684,32 @@ export class FakeServer {
   }
 }
 
-function commandResult(): components["schemas"]["CommandResult"] {
+/** GET /api/events's query, as the server checks it. */
+const EventsQuery = z.object({
+  printerId: z.string().min(1).optional(),
+  type: z.array(EventType),
+  category: z.array(EventCategory),
+  includeTelemetry: z.enum(["true", "false"]).optional(),
+  before: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+
+/** The simulator's routes, as the extension.invoke commands they run. */
+function simulatorCommand(rest: string, body: unknown): PrinterCommand {
+  const actions: Record<string, string> = {
+    "/simulator/faults/error": "fault.error",
+    "/simulator/faults/filament-runout": "fault.filament_runout",
+    "/simulator/faults/disconnect": "fault.disconnect",
+    "/simulator/clear": "clear",
+    "/simulator/speed": "set_speed",
+  };
+  const action = actions[rest];
+  if (action === undefined) throw new Error(`No simulator route ${rest}.`);
   return {
-    commandId: "0199b3a0-1c00-7000-8000-00000000c001",
-    ok: true,
-    durationMs: 1,
+    kind: "extension.invoke",
+    extension: "simulator",
+    action,
+    params: z.json().parse(body ?? {}),
   };
 }
 

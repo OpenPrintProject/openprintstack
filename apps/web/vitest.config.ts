@@ -14,6 +14,9 @@ export default defineProject({
     environment: "jsdom",
     environmentOptions: { jsdom: { url: "http://localhost:5173/" } },
     setupFiles: ["./src/test/setup.ts"],
+    // Times show in the browser's time zone; the tests pin one with a summer
+    // offset, so they pass anywhere and show the conversion.
+    env: { TZ: "Europe/London" },
     // Runs the expectTypeOf tests in *.test-d.ts through tsc, so `pnpm test`
     // reports them alongside the runtime tests.
     typecheck: { enabled: true, tsconfig: "./tsconfig.json" },

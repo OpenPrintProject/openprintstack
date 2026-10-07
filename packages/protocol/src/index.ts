@@ -87,6 +87,7 @@ export {
 export {
   EventsTopic,
   FleetTopic,
+  matchesTopic,
   PrinterTopic,
   SessionUser,
   Topic,
