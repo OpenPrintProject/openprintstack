@@ -40,10 +40,26 @@ export function devProxy(
   return { "/api": { target: serverUrl(env), ws: true } };
 }
 
+/**
+ * The build's list of the npm packages bundled into its scripts, each with
+ * its licence, which the server serves at /licenses.txt. Vite only lists
+ * packages with code in the scripts; THIRD_PARTY_NOTICES.md names the ones
+ * that arrive as CSS or fonts.
+ */
+export const LICENSE_FILE = "licenses.txt";
+
 export default defineConfig(({ command }) => ({
   // The router plugin must come before React's.
   plugins: [tanstackRouter(ROUTER_CONFIG), react(), tailwindcss()],
   resolve: { tsconfigPaths: true },
+  build: {
+    license: { fileName: LICENSE_FILE },
+    // Modules run in the order the source imports them, whichever chunk they
+    // land in. Without it, a chunk's imports run before its own code, so
+    // main.tsx's first import (zod-config.ts) ran after the shared chunk had
+    // already built protocol's schemas. It makes the scripts about 3% bigger.
+    rolldownOptions: { output: { strictExecutionOrder: true } },
+  },
   // Only `vite` (serve) proxies, so a build never depends on OPS_PORT.
   ...(command === "serve" && { server: { proxy: devProxy(process.env) } }),
 }));

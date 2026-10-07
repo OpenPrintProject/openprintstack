@@ -17,6 +17,7 @@ import {
 } from "./openapi.ts";
 import { WS_PATH } from "./middleware/security-headers.ts";
 import { testApp } from "./test-app.ts";
+import { WEB_PATH } from "./web.ts";
 
 type Operation = {
   operationId?: string;
@@ -68,8 +69,9 @@ describe("openapi.json", () => {
   it("documents every route the app serves, and serves every one it documents", async () => {
     const t = await testApp();
 
-    // The spec and the WebSocket upgrade aren't REST operations.
-    const undocumented = [OPENAPI_PATH, WS_PATH];
+    // The spec, the WebSocket upgrade and the web app's pages aren't REST
+    // operations.
+    const undocumented = [OPENAPI_PATH, WS_PATH, WEB_PATH];
     const served = t.app.routes
       .filter(
         (route) => route.method !== "ALL" && !undocumented.includes(route.path),

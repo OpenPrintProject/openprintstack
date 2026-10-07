@@ -8,6 +8,7 @@
     "build": "vite build",
     "dev": "vite",
     "generate": "node scripts/generate.ts",
+    "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

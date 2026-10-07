@@ -5,11 +5,13 @@
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
+    "build": "tsdown",
     "db:drift": "bash scripts/check-migrations.sh",
     "db:generate": "drizzle-kit generate",
     "dev": "OPS_ENV=development node --watch src/main.ts",
     "openapi:emit": "node scripts/emit-openapi.ts",
-    "start": "node src/main.ts",
+    "start": "node --enable-source-maps dist/main.mjs",
+    "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
@@ -32,6 +34,7 @@
     "@types/ws": "^8.18.2",
     "drizzle-kit": "^0.31.11",
     "pino-pretty": "^13.2.0",
+    "tsdown": "^0.23.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

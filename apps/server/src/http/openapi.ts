@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import serverPackage from "../../package.json" with { type: "json" };
 import { SESSION_COOKIE } from "../auth/sessions.ts";
+import { SERVER_DIR } from "../server-dir.ts";
 import { apiRoutes } from "./routes/index.ts";
 
 // The OpenAPI 3.1 document for the REST API, built from the routes that
@@ -24,10 +25,7 @@ import { apiRoutes } from "./routes/index.ts";
 export const OPENAPI_PATH = "/api/openapi.json";
 
 /** The committed copy, which the web app's client is generated from. */
-export const OPENAPI_FILE = path.join(
-  import.meta.dirname,
-  "../../openapi.json",
-);
+export const OPENAPI_FILE = path.join(SERVER_DIR, "openapi.json");
 
 type JsonObject = { [key: string]: unknown };
 
