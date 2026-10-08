@@ -136,6 +136,7 @@ packages/
   driver-simulated/    a simulated printer, for trying things out and for tests
 docs/
   phase-0.md           the plan for this first phase
+  phase-1.md           the plan for the next phase: real printers, discovery and installers
 ```
 
 Some boundaries are checked by ESLint: the web app talks to printers only through the server's API, `protocol` depends on nothing but Zod, and in the server only `src/drivers/registry.ts` may import a driver.
