@@ -64,22 +64,22 @@ Then open <http://localhost:5173>, where Vite serves the web app and passes `/ap
 
 #### Settings
 
-Settings are environment variables, for example `OPS_PORT=8080 pnpm start`. The server refuses to start if one is invalid, or if an `OPS_` variable isn't one it knows.
+Settings are environment variables, for example `OPS_PORT=8080 pnpm start` (in PowerShell, `$env:OPS_PORT=8080; pnpm start`). The server refuses to start if one is invalid, or if an `OPS_` variable isn't one it knows.
 
-| Variable                           | Default                                          | What it does                                                                                                                                                                                   |
-| ---------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OPS_HOST`                         | `127.0.0.1`                                      | The address to listen on. `127.0.0.1` keeps it to this Mac; `0.0.0.0` lets other devices on your network in. It's plain HTTP for now, so only do that on a network you trust.                  |
-| `OPS_PORT`                         | `7337`                                           | The port to listen on. `0` takes any free port, which the log names.                                                                                                                           |
-| `OPS_ALLOWED_HOSTS`                | (none)                                           | Other names the server answers to, separated by commas, such as `printers.local,192.168.1.20`. It always answers to `localhost`, `127.0.0.1`, `[::1]` and `OPS_HOST`, and refuses other names. |
-| `OPS_DATA_DIR`                     | `~/Library/Application Support/open-print-stack` | Where everything is stored (below). With `pnpm start` and `pnpm dev`, a relative path is taken from the repository's root, whichever folder you run them in; `~` isn't expanded.               |
-| `OPS_LOG_LEVEL`                    | `info`                                           | `silent`, `fatal`, `error`, `warn`, `info`, `debug` or `trace`. Logs are JSON lines on stdout.                                                                                                 |
-| `OPS_ENV`                          | `production`                                     | `development` (which `pnpm dev` sets) pretty-prints the logs and adds extra checks; `test` adds the checks only.                                                                               |
-| `OPS_TELEMETRY_SAMPLE_INTERVAL_MS` | `5000`                                           | How often each printer's temperatures and progress are stored, at most. `0` stores every update. The live view always gets every update.                                                       |
-| `OPS_TELEMETRY_RETENTION_DAYS`     | `7`                                              | How long stored telemetry is kept. Every other event is kept.                                                                                                                                  |
+| Variable                           | Default                                  | What it does                                                                                                                                                                                   |
+| ---------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OPS_HOST`                         | `127.0.0.1`                              | The address to listen on. `127.0.0.1` keeps it to this computer; `0.0.0.0` lets other devices on your network in. It's plain HTTP for now, so only do that on a network you trust.             |
+| `OPS_PORT`                         | `7337`                                   | The port to listen on. `0` takes any free port, which the log names.                                                                                                                           |
+| `OPS_ALLOWED_HOSTS`                | (none)                                   | Other names the server answers to, separated by commas, such as `printers.local,192.168.1.20`. It always answers to `localhost`, `127.0.0.1`, `[::1]` and `OPS_HOST`, and refuses other names. |
+| `OPS_DATA_DIR`                     | your user's app data (see [Data](#data)) | Where everything is stored (below). With `pnpm start` and `pnpm dev`, a relative path is taken from the repository's root, whichever folder you run them in; `~` isn't expanded.               |
+| `OPS_LOG_LEVEL`                    | `info`                                   | `silent`, `fatal`, `error`, `warn`, `info`, `debug` or `trace`. Logs are JSON lines on stdout.                                                                                                 |
+| `OPS_ENV`                          | `production`                             | `development` (which `pnpm dev` sets) pretty-prints the logs and adds extra checks; `test` adds the checks only.                                                                               |
+| `OPS_TELEMETRY_SAMPLE_INTERVAL_MS` | `5000`                                   | How often each printer's temperatures and progress are stored, at most. `0` stores every update. The live view always gets every update.                                                       |
+| `OPS_TELEMETRY_RETENTION_DAYS`     | `7`                                      | How long stored telemetry is kept. Every other event is kept.                                                                                                                                  |
 
 #### Data
 
-Everything the server stores is in its data directory:
+Everything the server stores is in its data directory, which by default is `~/Library/Application Support/open-print-stack` on macOS and `%LOCALAPPDATA%\open-print-stack` on Windows:
 
 | Path             | What it is                                                                    |
 | ---------------- | ----------------------------------------------------------------------------- |
@@ -87,7 +87,7 @@ Everything the server stores is in its data directory:
 | `printers/<id>/` | Each printer's own files, such as the simulator's uploaded G-code.            |
 | `staging/`       | Uploads on their way to a printer. It's emptied at every start.               |
 
-To see what's been recorded, for example:
+To see what's been recorded, for example on macOS:
 
 ```bash
 sqlite3 ~/Library/Application\ Support/open-print-stack/ops.sqlite 'select type, count(*) from events group by 1'

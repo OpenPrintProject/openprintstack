@@ -350,4 +350,13 @@ describe("defaultDataDir", () => {
       );
     },
   );
+
+  it.runIf(process.platform === "win32")(
+    "is in %LOCALAPPDATA%, without env-paths' Data folder, on Windows",
+    () => {
+      expect(defaultDataDir()).toBe(
+        path.join(process.env.LOCALAPPDATA!, "open-print-stack"),
+      );
+    },
+  );
 });

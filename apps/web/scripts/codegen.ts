@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Open Print Stack contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { Generator, getConfig } from "@tanstack/router-generator";
@@ -77,6 +78,17 @@ function isBinary(schema: unknown): boolean {
  * tree instead.)
  */
 export async function generateRouteTree(root: string): Promise<void> {
-  const config = getConfig({ ...ROUTER_CONFIG, disableLogging: true }, root);
+  const config = getConfig(
+    {
+      ...ROUTER_CONFIG,
+      disableLogging: true,
+      // The generator writes the tree to a temporary file and renames it into
+      // place, which only works within one drive. By default that file is
+      // under the working directory, which on Windows can be on a different
+      // drive from `root` (the tests' copy is in the system's temp folder).
+      tmpDir: join(root, ".tanstack", "tmp"),
+    },
+    root,
+  );
   await new Generator({ config, root }).run();
 }

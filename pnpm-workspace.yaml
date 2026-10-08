@@ -28,3 +28,8 @@ allowBuilds:
   # drizzle-kit's esbuild. Its script only checks the platform binary, which
   # drizzle-kit doesn't need.
   esbuild: false
+
+# Scripts run in pnpm's own bash-like shell on every platform, so a script
+# such as `OPS_ENV=development node --watch src/main.ts` works on Windows too,
+# where pnpm would otherwise use cmd.exe.
+shellEmulator: true

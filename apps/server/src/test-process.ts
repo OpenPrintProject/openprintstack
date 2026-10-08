@@ -21,7 +21,8 @@ export type RunNodeOptions = {
 
 /**
  * Runs `node <args>` with only `env` (plus PATH and HOME, and SYSTEMROOT on
- * Windows), and kills it when the test finishes if it's still running.
+ * Windows), and kills it when the test finishes if it's still running. Its
+ * stdin is a pipe the test can write to, as `child.stdin`.
  */
 export function runNode(
   args: string[],
@@ -39,7 +40,7 @@ export function runNode(
       }),
       ...env,
     },
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["pipe", "pipe", "pipe"],
     ...(options.cwd !== undefined && { cwd: options.cwd }),
   });
   let stdout = "";

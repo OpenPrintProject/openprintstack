@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
 
 import {
   DriverError,
@@ -81,9 +82,9 @@ describe("PUT /api/printers/{id}/files/{fileName}", () => {
       fileName: "benchy.gcode",
       sizeBytes: 11,
     });
-    expect(received?.request.path).toMatch(
-      new RegExp(`^${t.paths.staging}/[0-9a-f-]{36}$`),
-    );
+    const staged = received?.request.path ?? "";
+    expect(path.dirname(staged)).toBe(t.paths.staging);
+    expect(path.basename(staged)).toMatch(/^[0-9a-f-]{36}$/);
     expect(t.events.map((event) => event.type)).toEqual([
       "command.requested",
       "command.result",
