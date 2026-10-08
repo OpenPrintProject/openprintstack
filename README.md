@@ -23,7 +23,7 @@ Open Print Stack is in its first phase: the foundations, proved end to end with 
 
 ### Prerequisites
 
-- **macOS.** It's the only platform supported so far.
+- **macOS or Windows (x64).** They're the only platforms supported so far.
 - **Node.js 26.** The repository's `.node-version` file names it, so a version manager that reads that file picks it up. With [fnm](https://github.com/Schniz/fnm), run `fnm install` and then `fnm use` in the repository.
 - **pnpm 12.** Node 26 no longer includes corepack, so install pnpm with npm:
 

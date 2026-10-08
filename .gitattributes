@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Open Print Stack contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# Text files are checked out with LF line endings everywhere, Windows
+# included, so Prettier and the generated-file checks see the same bytes on
+# every platform. Git still detects binary files by itself.
+* text=auto eol=lf

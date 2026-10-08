@@ -18,17 +18,20 @@ import { tempDir } from "./test-utils.ts";
 
 const PRINTER_ID = "0199b3a0-1c00-7000-8000-000000000001";
 
+// Absolute on every platform: on Windows, path.resolve adds the drive.
+const ROOT = path.resolve("/srv/ops");
+
 async function mode(file: string): Promise<number> {
   return (await stat(file)).mode & 0o777;
 }
 
 describe("dataPaths", () => {
   it("lays out the data dir", () => {
-    expect(dataPaths("/srv/ops")).toEqual({
-      root: "/srv/ops",
-      database: "/srv/ops/ops.sqlite",
-      printers: "/srv/ops/printers",
-      staging: "/srv/ops/staging",
+    expect(dataPaths(ROOT)).toEqual({
+      root: ROOT,
+      database: path.join(ROOT, "ops.sqlite"),
+      printers: path.join(ROOT, "printers"),
+      staging: path.join(ROOT, "staging"),
     });
   });
 
@@ -123,11 +126,11 @@ describe("ensureDataDirs", () => {
 });
 
 describe("printerDir", () => {
-  const paths = dataPaths("/srv/ops");
+  const paths = dataPaths(ROOT);
 
   it("is the printer's id inside printers/", () => {
     expect(printerDir(paths, PRINTER_ID)).toBe(
-      `/srv/ops/printers/${PRINTER_ID}`,
+      path.join(ROOT, "printers", PRINTER_ID),
     );
   });
 
@@ -150,11 +153,11 @@ describe("printerDir", () => {
 });
 
 describe("stagedFilePath", () => {
-  const paths = dataPaths("/srv/ops");
+  const paths = dataPaths(ROOT);
 
   it("is the id inside staging/", () => {
     expect(stagedFilePath(paths, PRINTER_ID)).toBe(
-      `/srv/ops/staging/${PRINTER_ID}`,
+      path.join(ROOT, "staging", PRINTER_ID),
     );
   });
 

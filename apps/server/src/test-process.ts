@@ -20,8 +20,8 @@ export type RunNodeOptions = {
 };
 
 /**
- * Runs `node <args>` with only `env` (plus PATH and HOME), and kills it when
- * the test finishes if it's still running.
+ * Runs `node <args>` with only `env` (plus PATH and HOME, and SYSTEMROOT on
+ * Windows), and kills it when the test finishes if it's still running.
  */
 export function runNode(
   args: string[],
@@ -29,15 +29,18 @@ export function runNode(
   options: RunNodeOptions = {},
 ) {
   const child = spawn(process.execPath, args, {
-    // Nothing from this process's environment but what Node needs.
-    env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "", ...env },
+    // Nothing from this process's environment but what Node needs. On
+    // Windows that includes SYSTEMROOT, without which sockets fail.
+    env: {
+      PATH: process.env.PATH ?? "",
+      HOME: process.env.HOME ?? "",
+      ...(process.env.SYSTEMROOT !== undefined && {
+        SYSTEMROOT: process.env.SYSTEMROOT,
+      }),
+      ...env,
+    },
     stdio: ["ignore", "pipe", "pipe"],
     ...(options.cwd !== undefined && { cwd: options.cwd }),
-  });
-  onTestFinished(() => {
-    if (child.exitCode === null && child.signalCode === null) {
-      child.kill("SIGKILL");
-    }
   });
   let stdout = "";
   let stderr = "";
@@ -52,6 +55,14 @@ export function runNode(
   // "close", not "exit": when "exit" fires, the child's stdio may still be
   // open, with its last log lines unread.
   const exited = once(child, "close").then(([code]) => code as number | null);
+  // Waits for the exit, so the process has let go of its files before the
+  // test's temporary folders are removed: Windows can't delete open files.
+  onTestFinished(async () => {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill("SIGKILL");
+    }
+    await exited;
+  });
 
   const lines = (): Line[] =>
     stdout
