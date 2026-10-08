@@ -15,7 +15,9 @@ import {
   normalizeHostName,
 } from "./config.ts";
 
-const CWD = "/work";
+// Absolute on every platform: on Windows, path.resolve adds the drive.
+const CWD = path.resolve("/work");
+const DATA_DIR = path.resolve("/srv/ops");
 
 function load(env: Record<string, string | undefined>): Config {
   return loadConfig(env, { cwd: CWD });
@@ -52,7 +54,7 @@ describe("loadConfig", () => {
         OPS_HOST: "0.0.0.0",
         OPS_PORT: "8080",
         OPS_ALLOWED_HOSTS: "printers.local,192.168.1.20",
-        OPS_DATA_DIR: "/srv/ops",
+        OPS_DATA_DIR: DATA_DIR,
         OPS_LOG_LEVEL: "debug",
         OPS_TELEMETRY_SAMPLE_INTERVAL_MS: "1000",
         OPS_TELEMETRY_RETENTION_DAYS: "30",
@@ -62,7 +64,7 @@ describe("loadConfig", () => {
       host: "0.0.0.0",
       port: 8080,
       allowedHosts: ["printers.local", "192.168.1.20"],
-      dataDir: "/srv/ops",
+      dataDir: DATA_DIR,
       logLevel: "debug",
       telemetry: { sampleIntervalMs: 1000, retentionDays: 30 },
     });
@@ -217,13 +219,14 @@ describe("loadConfig", () => {
 
   describe("OPS_DATA_DIR", () => {
     it("keeps an absolute path", () => {
-      expect(load({ OPS_DATA_DIR: "/srv/ops data" }).dataDir).toBe(
-        "/srv/ops data",
-      );
+      const dir = path.resolve("/srv/ops data");
+      expect(load({ OPS_DATA_DIR: dir }).dataDir).toBe(dir);
     });
 
     it("resolves a relative path against the working directory", () => {
-      expect(load({ OPS_DATA_DIR: "data/../ops" }).dataDir).toBe("/work/ops");
+      expect(load({ OPS_DATA_DIR: "data/../ops" }).dataDir).toBe(
+        path.join(CWD, "ops"),
+      );
       expect(loadConfig({ OPS_DATA_DIR: "ops" }).dataDir).toBe(
         path.resolve("ops"),
       );
@@ -344,6 +347,15 @@ describe("defaultDataDir", () => {
     () => {
       expect(defaultDataDir()).toBe(
         path.join(os.homedir(), "Library/Application Support/open-print-stack"),
+      );
+    },
+  );
+
+  it.runIf(process.platform === "win32")(
+    "is in %LOCALAPPDATA%, without env-paths' Data folder, on Windows",
+    () => {
+      expect(defaultDataDir()).toBe(
+        path.join(process.env.LOCALAPPDATA!, "open-print-stack"),
       );
     },
   );

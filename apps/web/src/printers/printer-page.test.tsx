@@ -919,7 +919,12 @@ describe("the Simulator panel", () => {
       const { server, user } = await open();
 
       await user.clear(screen.getByLabelText(label));
-      if (text !== "") await user.type(screen.getByLabelText(label), text);
+      // Pasted, not typed: typing 501 characters one at a time can take
+      // longer than the 5 s a test gets on a slow CI machine.
+      if (text !== "") {
+        await user.click(screen.getByLabelText(label));
+        await user.paste(text);
+      }
       await user.click(buttonIn("Simulator", button));
 
       expect(await screen.findByText(message)).toBeDefined();

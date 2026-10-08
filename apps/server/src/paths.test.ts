@@ -18,17 +18,30 @@ import { tempDir } from "./test-utils.ts";
 
 const PRINTER_ID = "0199b3a0-1c00-7000-8000-000000000001";
 
+// Absolute on every platform: on Windows, path.resolve adds the drive.
+const ROOT = path.resolve("/srv/ops");
+
+// Windows has no Unix permission bits: Node ignores the mode when it creates a
+// folder there, and chmod only sets the read-only flag, which Windows ignores
+// on folders. Folders in the user's own profile get per-user access from
+// Windows itself, so on Windows these tests leave the permissions unchecked.
+const POSIX_MODES = process.platform !== "win32";
+
 async function mode(file: string): Promise<number> {
   return (await stat(file)).mode & 0o777;
 }
 
+async function isFolder(file: string): Promise<boolean> {
+  return (await stat(file)).isDirectory();
+}
+
 describe("dataPaths", () => {
   it("lays out the data dir", () => {
-    expect(dataPaths("/srv/ops")).toEqual({
-      root: "/srv/ops",
-      database: "/srv/ops/ops.sqlite",
-      printers: "/srv/ops/printers",
-      staging: "/srv/ops/staging",
+    expect(dataPaths(ROOT)).toEqual({
+      root: ROOT,
+      database: path.join(ROOT, "ops.sqlite"),
+      printers: path.join(ROOT, "printers"),
+      staging: path.join(ROOT, "staging"),
     });
   });
 
@@ -45,21 +58,27 @@ describe("ensureDataDirs", () => {
     await ensureDataDirs(paths);
 
     for (const dir of [parent, paths.root, paths.printers, paths.staging]) {
-      expect(await mode(dir)).toBe(0o700);
+      expect(await isFolder(dir)).toBe(true);
+      if (POSIX_MODES) expect(await mode(dir)).toBe(0o700);
     }
   });
 
   it("leaves existing folders' permissions alone", async () => {
     const paths = dataPaths(await tempDir());
     await mkdir(paths.printers);
-    await chmod(paths.root, 0o750);
-    await chmod(paths.printers, 0o755);
+    if (POSIX_MODES) {
+      await chmod(paths.root, 0o750);
+      await chmod(paths.printers, 0o755);
+    }
 
     await ensureDataDirs(paths);
 
-    expect(await mode(paths.root)).toBe(0o750);
-    expect(await mode(paths.printers)).toBe(0o755);
-    expect(await mode(paths.staging)).toBe(0o700);
+    expect(await isFolder(paths.staging)).toBe(true);
+    if (POSIX_MODES) {
+      expect(await mode(paths.root)).toBe(0o750);
+      expect(await mode(paths.printers)).toBe(0o755);
+      expect(await mode(paths.staging)).toBe(0o700);
+    }
   });
 
   it("empties staging but keeps the folder and everything else", async () => {
@@ -104,8 +123,9 @@ describe("ensureDataDirs", () => {
     ).rejects.toThrow("exists but isn't a folder.");
   });
 
-  // Root can read and write anything, so this only runs as a normal user.
-  it.skipIf(process.getuid?.() === 0)(
+  // Root can read and write anything, so this only runs as a normal user, and
+  // not on Windows, where chmod can't take away the right to write to a folder.
+  it.skipIf(process.getuid?.() === 0 || !POSIX_MODES)(
     "refuses a data dir this user can't write to",
     async () => {
       const paths = dataPaths(await tempDir());
@@ -123,11 +143,11 @@ describe("ensureDataDirs", () => {
 });
 
 describe("printerDir", () => {
-  const paths = dataPaths("/srv/ops");
+  const paths = dataPaths(ROOT);
 
   it("is the printer's id inside printers/", () => {
     expect(printerDir(paths, PRINTER_ID)).toBe(
-      `/srv/ops/printers/${PRINTER_ID}`,
+      path.join(ROOT, "printers", PRINTER_ID),
     );
   });
 
@@ -150,11 +170,11 @@ describe("printerDir", () => {
 });
 
 describe("stagedFilePath", () => {
-  const paths = dataPaths("/srv/ops");
+  const paths = dataPaths(ROOT);
 
   it("is the id inside staging/", () => {
     expect(stagedFilePath(paths, PRINTER_ID)).toBe(
-      `/srv/ops/staging/${PRINTER_ID}`,
+      path.join(ROOT, "staging", PRINTER_ID),
     );
   });
 
@@ -178,7 +198,7 @@ describe("ensurePrinterDir and removePrinterDir", () => {
     expect(await ensurePrinterDir(paths, PRINTER_ID)).toBe(dir);
 
     expect(dir).toBe(path.join(paths.printers, PRINTER_ID));
-    expect(await mode(dir)).toBe(0o700);
+    if (POSIX_MODES) expect(await mode(dir)).toBe(0o700);
     expect(await readdir(dir)).toEqual(["a.gcode"]);
   });
 

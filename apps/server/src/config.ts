@@ -51,10 +51,14 @@ export type Config = {
 
 /**
  * Where data lives when OPS_DATA_DIR isn't set. On macOS that's
- * `~/Library/Application Support/open-print-stack`.
+ * `~/Library/Application Support/open-print-stack`, and on Windows
+ * `%LOCALAPPDATA%\open-print-stack`.
  */
 export function defaultDataDir(): string {
-  return envPaths("open-print-stack", { suffix: "" }).data;
+  const { data } = envPaths("open-print-stack", { suffix: "" });
+  // On Windows env-paths adds a Data folder, to sit beside Config, Cache and
+  // Log folders that the server doesn't use.
+  return process.platform === "win32" ? path.dirname(data) : data;
 }
 
 /**

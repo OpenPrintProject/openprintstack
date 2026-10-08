@@ -21,17 +21,28 @@ const MAIN = path.join(import.meta.dirname, "main.ts");
 
 /**
  * Preloaded with --import, so the tests can make the server crash once it's
- * running: SIGUSR2 throws an uncaught exception, SIGHUP leaves a promise
- * rejection unhandled.
+ * running, by writing a line to its stdin: "throw" throws an uncaught
+ * exception, "reject" leaves a promise rejection unhandled. (Not signals,
+ * which Windows doesn't have.)
  */
 const CRASH_PRELOAD = `data:text/javascript,${encodeURIComponent(`
-process.on("SIGUSR2", () => {
-  setImmediate(() => { throw new Error("A bug that escaped every handler"); });
-});
-process.on("SIGHUP", () => {
-  void Promise.reject(new Error("A rejection nobody handled"));
+process.stdin.setEncoding("utf8").on("data", (line) => {
+  if (line.trim() === "throw") {
+    setImmediate(() => { throw new Error("A bug that escaped every handler"); });
+  }
+  if (line.trim() === "reject") {
+    void Promise.reject(new Error("A rejection nobody handled"));
+  }
 });
 `)}`;
+
+/**
+ * On Windows, Node can't send a process a signal: `child.kill()` ends it at
+ * once, without running its shutdown. So the tests of what the server does
+ * on SIGTERM and SIGINT run everywhere else; lifecycle.test.ts still tests
+ * that logic in-process on Windows.
+ */
+const itWithSignals = it.skipIf(process.platform === "win32");
 
 /** Generous: each run starts a fresh Node process. */
 const TIMEOUT_MS = 20_000;
@@ -79,7 +90,7 @@ describe("main.ts", { timeout: TIMEOUT_MS }, () => {
     expect(main.stdout()).toBe("");
   });
 
-  it("shuts down on SIGTERM and exits 0", async () => {
+  itWithSignals("shuts down on SIGTERM and exits 0", async () => {
     const env = await serverEnv();
     const main = run(env);
     const listening = await main.waitForLog("Listening on");
@@ -108,11 +119,9 @@ describe("main.ts", { timeout: TIMEOUT_MS }, () => {
       [],
       { cwd: working },
     );
+    // The database is open by the time the server listens.
     await main.waitForLog("Listening on");
 
-    main.child.kill("SIGTERM");
-
-    expect(await main.exited).toBe(0);
     expect(existsSync(path.join(launched, "data", "ops.sqlite"))).toBe(true);
     expect(existsSync(path.join(working, "data"))).toBe(false);
   });
@@ -131,9 +140,6 @@ describe("main.ts", { timeout: TIMEOUT_MS }, () => {
       );
       await main.waitForLog("Listening on");
 
-      main.child.kill("SIGTERM");
-
-      expect(await main.exited).toBe(0);
       expect(existsSync(path.join(working, "data", "ops.sqlite"))).toBe(true);
     },
   );
@@ -157,23 +163,23 @@ describe("main.ts", { timeout: TIMEOUT_MS }, () => {
   it.each([
     [
       "an uncaught exception",
-      "SIGUSR2",
+      "throw",
       "An uncaught exception; exiting",
       "A bug that escaped every handler",
     ],
     [
       "an unhandled rejection",
-      "SIGHUP",
+      "reject",
       "An unhandled promise rejection; exiting",
       "A rejection nobody handled",
     ],
   ] as const)(
     "logs %s as fatal and exits 1",
-    async (_name, signal, msg, message) => {
+    async (_name, crash, msg, message) => {
       const main = run(await serverEnv(), ["--import", CRASH_PRELOAD]);
       await main.waitForLog("Listening on");
 
-      main.child.kill(signal);
+      main.child.stdin.write(`${crash}\n`);
 
       expect(await main.exited).toBe(1);
       expect(main.logged(msg)).toMatchObject({
@@ -185,33 +191,38 @@ describe("main.ts", { timeout: TIMEOUT_MS }, () => {
     },
   );
 
-  it("exits 1 at once on a second signal during the shutdown", async () => {
-    const main = run(await serverEnv());
-    const { url } = (await main.waitForLog("Listening on")) as { url: string };
-    const setup = await fetch(`${url}/api/auth/setup`, {
-      method: "POST",
-      headers: { origin: url, "content-type": "application/json" },
-      body: JSON.stringify({ username: "rob", password: "correct horse 1" }),
-    });
-    const token = /ops_session=([^;]*)/.exec(
-      setup.headers.get("set-cookie") ?? "",
-    )?.[1];
-    // A client that stops reading never answers the close, so the shutdown
-    // waits the hub's 2 s grace for it: time for a second signal.
-    const client = await TestClient.connect(url, {
-      ...(token !== undefined && { token }),
-    });
-    client.socket.pause();
+  itWithSignals(
+    "exits 1 at once on a second signal during the shutdown",
+    async () => {
+      const main = run(await serverEnv());
+      const { url } = (await main.waitForLog("Listening on")) as {
+        url: string;
+      };
+      const setup = await fetch(`${url}/api/auth/setup`, {
+        method: "POST",
+        headers: { origin: url, "content-type": "application/json" },
+        body: JSON.stringify({ username: "rob", password: "correct horse 1" }),
+      });
+      const token = /ops_session=([^;]*)/.exec(
+        setup.headers.get("set-cookie") ?? "",
+      )?.[1];
+      // A client that stops reading never answers the close, so the shutdown
+      // waits the hub's 2 s grace for it: time for a second signal.
+      const client = await TestClient.connect(url, {
+        ...(token !== undefined && { token }),
+      });
+      client.socket.pause();
 
-    main.child.kill("SIGTERM");
-    await main.waitForLog("SIGTERM: shutting down");
-    const signalled = performance.now();
-    main.child.kill("SIGINT");
+      main.child.kill("SIGTERM");
+      await main.waitForLog("SIGTERM: shutting down");
+      const signalled = performance.now();
+      main.child.kill("SIGINT");
 
-    expect(await main.exited).toBe(1);
-    expect(performance.now() - signalled).toBeLessThan(1500);
-    expect(
-      main.logged("A second signal: exiting without finishing"),
-    ).toMatchObject({ level: "warn", signal: "SIGINT" });
-  });
+      expect(await main.exited).toBe(1);
+      expect(performance.now() - signalled).toBeLessThan(1500);
+      expect(
+        main.logged("A second signal: exiting without finishing"),
+      ).toMatchObject({ level: "warn", signal: "SIGINT" });
+    },
+  );
 });
