@@ -50,6 +50,7 @@ describe("settingsFields", () => {
       "buildVolumeZMm",
       "maxMoveSpeedMmS",
       "cameraEnabled",
+      "accessCode",
     ]);
     expect(fields[0]).toEqual({
       key: "printDurationS",
@@ -79,6 +80,19 @@ describe("settingsFields", () => {
       kind: "boolean",
       default: true,
     });
+    expect(fields[10]).toEqual({
+      key: "accessCode",
+      label: "Access code",
+      description:
+        "Optional, and never checked: it shows how a real printer's access code is kept secret.",
+      required: false,
+      kind: "string",
+      writeOnly: true,
+      default: undefined,
+      minLength: undefined,
+      maxLength: 64,
+      pattern: undefined,
+    });
   });
 
   it("reads strings, enums and required fields, using the key when there's no title", () => {
@@ -104,6 +118,7 @@ describe("settingsFields", () => {
         description: undefined,
         required: true,
         kind: "string",
+        writeOnly: false,
         default: undefined,
         minLength: 1,
         maxLength: 253,
@@ -197,6 +212,21 @@ describe("settingsFields", () => {
       "The setting \"host\"'s pattern isn't valid.",
     ],
     [
+      "a write-only number",
+      schemaOf({ pin: { type: "integer", writeOnly: true } }),
+      'The setting "pin" uses "writeOnly", which the form doesn\'t support yet.',
+    ],
+    [
+      "a write-only enum",
+      schemaOf({ key: { type: "string", enum: ["a"], writeOnly: true } }),
+      'The setting "key" uses "writeOnly" with "enum", which the form doesn\'t support yet.',
+    ],
+    [
+      "writeOnly that isn't a boolean",
+      schemaOf({ key: { type: "string", writeOnly: "yes" } }),
+      "The setting \"key\"'s writeOnly isn't valid.",
+    ],
+    [
       "required that isn't a list of names",
       schemaOf({}, { required: "host" }),
       "The settings schema's \"required\" isn't a list of names.",
@@ -217,6 +247,7 @@ describe("initialValues", () => {
       off: { type: "boolean" },
       host: { type: "string", default: "printer.local" },
       note: { type: "string" },
+      code: { type: "string", writeOnly: true },
     }),
   );
 
@@ -228,6 +259,7 @@ describe("initialValues", () => {
       off: false,
       host: "printer.local",
       note: "",
+      code: "",
     });
   });
 
@@ -248,7 +280,12 @@ describe("initialValues", () => {
       off: true,
       host: "bench.local",
       note: "spare",
+      code: "",
     });
+  });
+
+  it("starts a write-only field empty, whatever it's given", () => {
+    expect(initialValues(fields, { code: "1234" }).code).toBe("");
   });
 });
 
@@ -301,6 +338,34 @@ describe("settingsSchema", () => {
       speed: ["Enter a number."],
       host: ["Enter a value."],
       mode: ["Choose one."],
+    });
+  });
+
+  describe("a required write-only field", () => {
+    const fields = settingsFields(
+      schemaOf(
+        { code: { type: "string", minLength: 4, writeOnly: true } },
+        { required: ["code"] },
+      ),
+    );
+
+    it("must be filled in when nothing is stored", () => {
+      const result = settingsSchema(fields).safeParse({ code: "" });
+
+      expect(result.error?.issues.map((issue) => issue.message)).toEqual([
+        "Enter a value.",
+      ]);
+    });
+
+    it("may be left empty when one is stored, which leaves it out", () => {
+      expect(settingsSchema(fields, ["code"]).parse({ code: "" })).toEqual({});
+    });
+
+    it("is checked and sent when a new one is typed in", () => {
+      const schema = settingsSchema(fields, ["code"]);
+
+      expect(schema.parse({ code: "5678" })).toEqual({ code: "5678" });
+      expect(schema.safeParse({ code: "567" }).success).toBe(false);
     });
   });
 

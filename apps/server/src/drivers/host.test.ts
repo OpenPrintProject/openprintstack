@@ -1048,3 +1048,217 @@ describe("DriverHost: the transport", () => {
     expect(published().map((event) => event.type)).toEqual(["printer.alert"]);
   });
 });
+
+describe("DriverHost: secrets", () => {
+  // A distinctive value, so a leak anywhere shows up in a plain search.
+  const SECRET = "s3cret-c0de";
+  const WITH_SECRET = { accessCode: SECRET };
+
+  /** Fails if the secret is in any event or log line so far. */
+  function expectNoSecret(context: Awaited<ReturnType<typeof setup>>) {
+    expect(JSON.stringify(context.events)).not.toContain(SECRET);
+    expect(context.rawLogs().join("")).not.toContain(SECRET);
+  }
+
+  it("redacts the secret from everything the driver emits", async () => {
+    const context = await setup();
+    const { host, logs, published, run } = context;
+    await host.start(run(WITH_SECRET));
+    const driver = context.drivers.latest(PRINTER_ID);
+    context.events.length = 0;
+
+    driver.emit({
+      type: "status",
+      status: "error",
+      detail: `Logged in with ${SECRET}`,
+      error: { code: "auth", message: `Code ${SECRET} was refused` },
+    });
+    driver.emit({
+      type: "alert",
+      severity: "warning",
+      code: "auth",
+      message: `mqtt://elegoo:${SECRET}@printer.local`,
+    });
+    driver.emit({
+      type: "job_lifecycle",
+      event: "started",
+      fileName: `${SECRET}.gcode`,
+    });
+    driver.emit({
+      type: "log",
+      level: "info",
+      message: `Connecting with ${SECRET}`,
+      data: {
+        url: `mqtt://elegoo:${SECRET}@printer.local`,
+        nested: { headers: [`X-Token: ${SECRET}`] },
+        [SECRET]: 1,
+      },
+    });
+    await settle();
+
+    expect(published().map(({ type, payload }) => ({ type, payload }))).toEqual(
+      [
+        {
+          type: "printer.status_changed",
+          payload: {
+            previous: "idle",
+            status: "error",
+            detail: "Logged in with [Redacted]",
+            error: { code: "auth", message: "Code [Redacted] was refused" },
+          },
+        },
+        {
+          type: "printer.alert",
+          payload: {
+            severity: "warning",
+            code: "auth",
+            message: "mqtt://elegoo:[Redacted]@printer.local",
+          },
+        },
+        {
+          type: "printer.job_started",
+          payload: { fileName: "[Redacted].gcode" },
+        },
+      ],
+    );
+    expect(logs().at(-1)).toMatchObject({
+      msg: "Connecting with [Redacted]",
+      url: "mqtt://elegoo:[Redacted]@printer.local",
+      nested: { headers: ["X-Token: [Redacted]"] },
+      "[Redacted]": 1,
+    });
+    expectNoSecret(context);
+  });
+
+  it("leaves numbers alone, even when they look like the secret", async () => {
+    const context = await setup();
+    await context.host.start(context.run({ accessCode: "250" }));
+    const driver = context.drivers.latest(PRINTER_ID);
+
+    driver.emit({
+      type: "telemetry",
+      telemetry: { temperatures: { nozzle: { actualC: 250, targetC: 250 } } },
+    });
+    await settle();
+
+    expect(context.events.at(-1)).toMatchObject({
+      type: "printer.telemetry",
+      payload: {
+        telemetry: {
+          temperatures: { nozzle: { actualC: 250, targetC: 250 } },
+        },
+      },
+    });
+  });
+
+  it("redacts the secret from a command's error, dropping its cause", async () => {
+    const context = await setup();
+    await context.host.start(context.run(WITH_SECRET));
+    context.drivers.latest(PRINTER_ID).handle("pause", () => {
+      throw new DriverError("printer_rejected", `Code ${SECRET} was refused`);
+    });
+
+    const error: unknown = await context.host
+      .call({ op: "pause", args: {} }, CALL_TIMEOUT_MS)
+      .catch((reason: unknown) => reason);
+
+    expect(error).toEqual(
+      new DriverError("printer_rejected", "Code [Redacted] was refused"),
+    );
+    expect((error as Error).cause).toBeUndefined();
+  });
+
+  it("keeps an error without the secret as it is", async () => {
+    const context = await setup();
+    await context.host.start(context.run(WITH_SECRET));
+    context.drivers.latest(PRINTER_ID).handle("pause", () => {
+      throw new DriverError("invalid_state", "Nothing to pause.");
+    });
+
+    await expect(
+      context.host.call({ op: "pause", args: {} }, CALL_TIMEOUT_MS),
+    ).rejects.toEqual(new DriverError("invalid_state", "Nothing to pause."));
+  });
+
+  it("redacts the secret when the driver can't be created, in the event and the log", async () => {
+    const context = await setup();
+    const module = {
+      ...context.drivers.module,
+      create: () => {
+        throw new Error(`Bad code ${SECRET}`, {
+          cause: new Error(`Rejected ${SECRET}`),
+        });
+      },
+    } as DriverModule;
+
+    await context.host.start(context.run(WITH_SECRET, module));
+
+    expect(context.events.at(-1)).toMatchObject({
+      type: "printer.status_changed",
+      payload: {
+        status: "offline",
+        error: {
+          code: "driver_failed",
+          message: "The driver couldn't be created: Bad code [Redacted]",
+        },
+      },
+    });
+    const line = context
+      .logs()
+      .find((entry) => entry.msg === "The driver couldn't start");
+    expect(line?.err).toMatchObject({
+      type: "DriverStartError",
+      message: expect.stringContaining("Rejected [Redacted]") as unknown,
+      stack: expect.stringContaining("Bad code [Redacted]") as unknown,
+    });
+    expectNoSecret(context);
+  });
+
+  it("redacts the secret when connect fails, and when stopping fails", async () => {
+    const context = await setup();
+    context.drivers.handle("connect", () => {
+      throw new Error(`Refused ${SECRET}`);
+    });
+
+    await context.host.start(context.run(WITH_SECRET));
+    expect(context.events.at(-1)).toMatchObject({
+      payload: {
+        status: "offline",
+        error: {
+          message: expect.stringContaining("Refused [Redacted]") as unknown,
+        },
+      },
+    });
+
+    context.drivers.handle("connect", (_, driver) => {
+      driver.emit(status("idle"));
+    });
+    context.drivers.handle("disconnect", () => {
+      throw new Error(`Couldn't log out ${SECRET}`);
+    });
+    await context.host.start(context.run(WITH_SECRET));
+    await context.host.stop();
+
+    expect(
+      context.logs().find((entry) => entry.op === "disconnect")?.err,
+    ).toMatchObject({
+      message: expect.stringContaining("[Redacted]") as unknown,
+    });
+    expectNoSecret(context);
+  });
+
+  it("redacts the new secret after a restart with new settings", async () => {
+    const context = await setup();
+    await context.host.start(context.run(WITH_SECRET));
+    await context.host.stop();
+    await context.host.start(context.run({ accessCode: "n3w-c0de" }));
+    const driver = context.drivers.latest(PRINTER_ID);
+
+    driver.emit(status("idle", "Using n3w-c0de"));
+    await settle();
+
+    expect(context.events.at(-1)).toMatchObject({
+      payload: { detail: "Using [Redacted]" },
+    });
+  });
+});

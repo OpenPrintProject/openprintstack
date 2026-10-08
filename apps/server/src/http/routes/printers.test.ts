@@ -13,6 +13,7 @@ type Config = {
   name: string;
   driverType: string;
   settings: Record<string, unknown>;
+  secretsSet: string[];
   settingsVersion: number;
   createdAt: string;
   updatedAt: string;
@@ -35,6 +36,7 @@ describe("GET /api/driver-types", () => {
         type: string;
         name: string;
         description: string;
+        setupHelp: string[];
         settingsSchema: Record<string, unknown>;
         defaults: Record<string, unknown>;
       }[];
@@ -47,19 +49,28 @@ describe("GET /api/driver-types", () => {
       type: TEST_DRIVER_TYPE,
       name: "Test printer",
       description: "A driver that does what the test tells it.",
+      setupHelp: [],
       settingsSchema: expect.objectContaining({
         type: "object",
         properties: expect.objectContaining({
           nozzleMaxC: expect.objectContaining({ default: 250 }) as unknown,
+          accessCode: { type: "string", writeOnly: true },
         }) as unknown,
       }) as unknown,
       defaults: { nozzleMaxC: 250, failCreate: false },
     });
     expect(driverTypes[1]).toMatchObject({
       name: "Simulated printer",
+      setupHelp: [
+        expect.stringContaining("nothing to switch on") as unknown,
+        expect.stringContaining("access code is optional") as unknown,
+      ],
       defaults: { printDurationS: 600, speedMultiplier: 1 },
       settingsSchema: {
-        properties: { printDurationS: { title: "Print duration (s)" } },
+        properties: {
+          printDurationS: { title: "Print duration (s)" },
+          accessCode: { title: "Access code", writeOnly: true },
+        },
       },
     });
   });
@@ -109,6 +120,7 @@ describe("POST /api/printers", () => {
       name: "Bench",
       driverType: TEST_DRIVER_TYPE,
       settings: { nozzleMaxC: 280, failCreate: false },
+      secretsSet: [],
       settingsVersion: 1,
       createdAt: expect.any(String) as unknown,
       updatedAt: config.createdAt,
@@ -278,6 +290,7 @@ describe("GET /api/printers/{id} and /config", () => {
       name: "Bench",
       driverType: TEST_DRIVER_TYPE,
       settings: { nozzleMaxC: 260, failCreate: false },
+      secretsSet: [],
       settingsVersion: 1,
       createdAt: new Date(
         t.repos.printers.findById(id)?.createdAt ?? 0,
@@ -447,6 +460,105 @@ describe("PATCH /api/printers/{id}", () => {
     expect(taken.status).toBe(409);
     expect(invalid.status).toBe(422);
     expect((await apiError(invalid)).code).toBe("invalid_settings");
+  });
+});
+
+describe("write-only settings", () => {
+  const SECRET = "s3cret-c0de";
+
+  it("are stored but never answered, with secretsSet naming those set", async () => {
+    const t = await testApp();
+    const { token } = await t.setupAdmin();
+
+    const added = await t.call("POST", "/api/printers", {
+      token,
+      json: {
+        name: "Bench",
+        driverType: TEST_DRIVER_TYPE,
+        settings: { accessCode: SECRET },
+      },
+    });
+    const config = await json<Config>(added);
+    const read = await t.call("GET", `/api/printers/${config.id}/config`, {
+      token,
+    });
+
+    expect(config).toMatchObject({
+      settings: { nozzleMaxC: 250, failCreate: false },
+      secretsSet: ["accessCode"],
+    });
+    expect(config.settings).not.toHaveProperty("accessCode");
+    expect(await json<Config>(read)).toEqual(config);
+    expect(t.repos.printers.findById(config.id)?.settings).toMatchObject({
+      accessCode: SECRET,
+    });
+  });
+
+  it("aren't stored when added empty", async () => {
+    const t = await testApp();
+    const { token } = await t.setupAdmin();
+
+    const id = await t.addPrinter(token, "Bench", { accessCode: "" });
+
+    const config = await t.call("GET", `/api/printers/${id}/config`, {
+      token,
+    });
+    expect((await json<Config>(config)).secretsSet).toEqual([]);
+    expect(t.repos.printers.findById(id)?.settings).not.toHaveProperty(
+      "accessCode",
+    );
+  });
+
+  it("are kept by an edit that leaves them empty or out", async () => {
+    const t = await testApp();
+    const { token } = await t.setupAdmin();
+    const id = await t.addPrinter(token, "Bench", { accessCode: SECRET });
+    const driver = t.drivers.latest(id);
+
+    for (const settings of [{ accessCode: "" }, {}]) {
+      const answer = await t.call("PATCH", `/api/printers/${id}`, {
+        token,
+        json: { settings },
+      });
+
+      expect(await json<Config>(answer)).toMatchObject({
+        secretsSet: ["accessCode"],
+        settingsVersion: 1,
+      });
+    }
+    const renamed = await t.call("PATCH", `/api/printers/${id}`, {
+      token,
+      json: { name: "Workshop", settings: { accessCode: "", nozzleMaxC: 260 } },
+    });
+
+    expect(await json<Config>(renamed)).toMatchObject({
+      name: "Workshop",
+      settings: { nozzleMaxC: 260 },
+      secretsSet: ["accessCode"],
+      settingsVersion: 2,
+    });
+    expect(t.repos.printers.findById(id)?.settings).toMatchObject({
+      accessCode: SECRET,
+    });
+    expect(t.drivers.latest(id)).not.toBe(driver);
+    expect(t.drivers.latest(id).init.settings.accessCode).toBe(SECRET);
+  });
+
+  it("are replaced by a new value, restarting the driver", async () => {
+    const t = await testApp();
+    const { token } = await t.setupAdmin();
+    const id = await t.addPrinter(token, "Bench", { accessCode: SECRET });
+
+    const answer = await t.call("PATCH", `/api/printers/${id}`, {
+      token,
+      json: { settings: { accessCode: "n3w-c0de" } },
+    });
+
+    expect(await json<Config>(answer)).toMatchObject({
+      secretsSet: ["accessCode"],
+      settingsVersion: 2,
+    });
+    expect(t.drivers.latest(id).init.settings.accessCode).toBe("n3w-c0de");
   });
 });
 

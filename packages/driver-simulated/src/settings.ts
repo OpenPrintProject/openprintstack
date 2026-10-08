@@ -21,7 +21,8 @@ function buildVolumeAxis(axis: "X" | "Y" | "Z") {
 
 /**
  * The simulated printer's settings. The UI renders them as a form, using each
- * field's title and description as its label and hint.
+ * field's title and description as its label and hint. The access code is
+ * write-only, like a real printer's, so the server never shows it again.
  */
 export const simulatedSettingsSchema = z.object({
   printDurationS: z.int().min(1).max(86_400).default(600).meta({
@@ -62,6 +63,12 @@ export const simulatedSettingsSchema = z.object({
   cameraEnabled: z.boolean().default(true).meta({
     title: "Camera",
     description: "Whether the printer has a camera that takes snapshots.",
+  }),
+  accessCode: z.string().max(64).optional().meta({
+    title: "Access code",
+    description:
+      "Optional, and never checked: it shows how a real printer's access code is kept secret.",
+    writeOnly: true,
   }),
 });
 

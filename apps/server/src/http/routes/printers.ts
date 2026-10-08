@@ -15,7 +15,10 @@ import {
 import { z } from "zod";
 
 import type { Printer } from "../../db/repos/index.ts";
-import { PrinterServiceError } from "../../printers/printer-service.ts";
+import {
+  type PrinterConfigSettings,
+  PrinterServiceError,
+} from "../../printers/printer-service.ts";
 import { asJson } from "../errors.ts";
 import { requireSession } from "../middleware/session.ts";
 import {
@@ -29,10 +32,12 @@ import { newRoutes } from "../validation.ts";
 
 // The driver types, and printers: their live snapshots (from the state store)
 // and their stored config (from the printers table, settings included).
+// Write-only settings (secrets, such as an access code) are taken but never
+// given back: a config lists in `secretsSet` which ones have a value.
 
 const SettingsInput = z.record(z.string(), JsonValue).meta({
   description:
-    "Settings fields, checked against the driver type's settings schema.",
+    "Settings fields, checked against the driver type's settings schema. An empty string for a write-only field counts as left out.",
 });
 
 const DriverType = z
@@ -40,9 +45,13 @@ const DriverType = z
     type: z.string(),
     name: z.string(),
     description: z.string(),
+    setupHelp: z.array(z.string()).meta({
+      description:
+        "Short plain-text steps to follow before adding a printer of this type, shown above the add form. Empty when there are none.",
+    }),
     settingsSchema: z.record(z.string(), JsonValue).meta({
       description:
-        "The settings' JSON Schema (draft 2020-12), describing the input: fields with a default are optional and carry it.",
+        "The settings' JSON Schema (draft 2020-12), describing the input: fields with a default are optional and carry it. Secrets are marked writeOnly.",
     }),
     defaults: z.record(z.string(), JsonValue).meta({
       description: "The default of each settings field that has one.",
@@ -55,10 +64,15 @@ const PrinterConfig = z
     id: z.string(),
     name: z.string(),
     driverType: z.string(),
-    settings: z.record(
-      z.string(),
-      z.union([z.string(), z.number(), z.boolean()]),
-    ),
+    settings: z
+      .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+      .meta({
+        description:
+          "Every stored setting except the write-only ones, which are never returned. Empty if the driver type isn't available.",
+      }),
+    secretsSet: z.array(z.string()).meta({
+      description: "The write-only settings that have a stored value.",
+    }),
     settingsVersion: z.int().positive(),
     createdAt: IsoDateTime,
     updatedAt: IsoDateTime,
@@ -66,7 +80,7 @@ const PrinterConfig = z
   .meta({
     id: "PrinterConfig",
     description:
-      "A printer's stored config. Settings are stored with every default filled in.",
+      "A printer's stored config. Settings are stored with every default filled in; write-only ones are never returned.",
   });
 
 const NewPrinterRequest = z
@@ -82,7 +96,7 @@ const PrinterUpdateRequest = z
     name: PrinterName.optional(),
     settings: SettingsInput.optional().meta({
       description:
-        "Fields to change; the rest keep their stored values. Changing settings restarts the driver, and is refused (409 job_active) while a job is active.",
+        "Fields to change; the rest keep their stored values. A write-only field left out or empty keeps its stored value, and a new value replaces it. Changing settings restarts the driver, and is refused (409 job_active) while a job is active.",
     }),
   })
   .refine(
@@ -218,6 +232,7 @@ export function printerRoutes() {
           type,
           name: module.manifest.name,
           description: module.manifest.description,
+          setupHelp: module.manifest.setupHelp ?? [],
           settingsSchema: asJson(settingsJsonSchema(module)) as Record<
             string,
             JsonValue
@@ -255,11 +270,12 @@ export function printerRoutes() {
     return c.json(snapshot, 200);
   });
 
-  routes.openapi(getPrinterConfig, (c) => {
+  routes.openapi(getPrinterConfig, async (c) => {
+    const { deps } = c.var;
     const { id } = c.req.valid("param");
-    const printer = c.var.deps.repos.printers.findById(id);
+    const printer = deps.repos.printers.findById(id);
     if (printer === undefined) throw printerNotFound(id);
-    return c.json(toConfig(printer), 200);
+    return c.json(toConfig(printer, await deps.printers.config(printer)), 200);
   });
 
   routes.openapi(addPrinter, async (c) => {
@@ -271,28 +287,22 @@ export function printerRoutes() {
       settings: settings ?? {},
       userId: user.id,
     });
-    return c.json(toConfig(printer), 201);
+    return c.json(toConfig(printer, await deps.printers.config(printer)), 201);
   });
 
   routes.openapi(updatePrinter, async (c) => {
     const { deps, user } = c.var;
     const { id } = c.req.valid("param");
     const { name, settings } = c.req.valid("json");
-    let merged: Record<string, unknown> | undefined;
-    if (settings !== undefined) {
-      const stored = deps.repos.printers.findById(id);
-      if (stored === undefined) throw printerNotFound(id);
-      merged = { ...stored.settings, ...settings };
-    }
     const printer = await deps.printers.update(
       id,
       {
         ...(name !== undefined && { name }),
-        ...(merged !== undefined && { settings: merged }),
+        ...(settings !== undefined && { settings }),
       },
       user.id,
     );
-    return c.json(toConfig(printer), 200);
+    return c.json(toConfig(printer, await deps.printers.config(printer)), 200);
   });
 
   routes.openapi(deletePrinter, async (c) => {
@@ -305,12 +315,16 @@ export function printerRoutes() {
   return routes;
 }
 
-function toConfig(printer: Printer): z.infer<typeof PrinterConfig> {
+function toConfig(
+  printer: Printer,
+  { settings, secretsSet }: PrinterConfigSettings,
+): z.infer<typeof PrinterConfig> {
   return {
     id: printer.id,
     name: printer.name,
     driverType: printer.driverType,
-    settings: printer.settings,
+    settings,
+    secretsSet,
     settingsVersion: printer.settingsVersion,
     createdAt: new Date(printer.createdAt).toISOString(),
     updatedAt: new Date(printer.updatedAt).toISOString(),

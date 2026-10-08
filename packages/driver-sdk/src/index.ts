@@ -72,7 +72,11 @@ export {
   type WireResult,
 } from "./ops.ts";
 export { assertSerializable, findUnserializable } from "./serializable.ts";
-export { defaultSettings, settingsJsonSchema } from "./settings.ts";
+export {
+  defaultSettings,
+  settingsJsonSchema,
+  writeOnlySettings,
+} from "./settings.ts";
 export { reduceTelemetry } from "./telemetry.ts";
 export {
   createLoopbackTransport,

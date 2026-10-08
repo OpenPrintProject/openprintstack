@@ -23,6 +23,12 @@ export const DriverManifest = z.object({
   name: z.string().min(1),
   /** One sentence for the add-printer form. */
   description: z.string().min(1),
+  /**
+   * Short plain-text steps to follow before adding a printer of this type,
+   * such as switching on a LAN mode and setting an access code. The add form
+   * shows them as a numbered list above the settings.
+   */
+  setupHelp: z.array(z.string().min(1)).min(1).optional(),
 });
 
 export type DriverManifest = z.infer<typeof DriverManifest>;
@@ -61,7 +67,12 @@ export interface DriverContext {
   readonly log: DriverLogger;
 }
 
-/** A flat Zod object: every field a string, number, boolean or enum. */
+/**
+ * A flat Zod object: every field a string, number, boolean or enum. A field
+ * marked `.meta({ writeOnly: true })` (a standard JSON Schema keyword) holds a
+ * secret, such as an access code: it must be a plain string with no default,
+ * and the server never shows its value again (see `writeOnlySettings`).
+ */
 export type SettingsSchema = z.ZodObject;
 
 /** What a driver package exports (as its default export). */
@@ -69,7 +80,8 @@ export interface DriverModule<S extends SettingsSchema = SettingsSchema> {
   readonly manifest: DriverManifest;
   /**
    * The printer's settings. The UI renders it as a form through
-   * `settingsJsonSchema`. Defaults come from `.default()` on each field.
+   * `settingsJsonSchema`. Defaults come from `.default()` on each field;
+   * secrets are marked `.meta({ writeOnly: true })`.
    */
   readonly settingsSchema: S;
   /** The capabilities to show before the driver has connected. */

@@ -48,6 +48,7 @@ function TextField({
   type = "text",
   autoComplete,
   inputMode,
+  placeholder,
   description,
   disabled,
 }: {
@@ -56,6 +57,7 @@ function TextField({
   autoComplete?: string;
   /** "decimal" for a number: a text field, so the value is what was typed. */
   inputMode?: "decimal";
+  placeholder?: string;
   description?: ReactNode;
   disabled?: boolean;
 }) {
@@ -70,6 +72,7 @@ function TextField({
         type={type}
         autoComplete={autoComplete}
         inputMode={inputMode}
+        placeholder={placeholder}
         disabled={disabled}
         value={field.state.value}
         onBlur={field.handleBlur}

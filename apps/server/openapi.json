@@ -3229,6 +3229,13 @@
           "description": {
             "type": "string"
           },
+          "setupHelp": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Short plain-text steps to follow before adding a printer of this type, shown above the add form. Empty when there are none."
+          },
           "settingsSchema": {
             "type": "object",
             "propertyNames": {
@@ -3237,7 +3244,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/JsonValue"
             },
-            "description": "The settings' JSON Schema (draft 2020-12), describing the input: fields with a default are optional and carry it."
+            "description": "The settings' JSON Schema (draft 2020-12), describing the input: fields with a default are optional and carry it. Secrets are marked writeOnly."
           },
           "defaults": {
             "type": "object",
@@ -3254,6 +3261,7 @@
           "type",
           "name",
           "description",
+          "setupHelp",
           "settingsSchema",
           "defaults"
         ]
@@ -3746,7 +3754,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/JsonValue"
             },
-            "description": "Settings fields, checked against the driver type's settings schema."
+            "description": "Settings fields, checked against the driver type's settings schema. An empty string for a write-only field counts as left out."
           }
         },
         "required": [
@@ -4175,7 +4183,15 @@
                 "number",
                 "boolean"
               ]
-            }
+            },
+            "description": "Every stored setting except the write-only ones, which are never returned. Empty if the driver type isn't available."
+          },
+          "secretsSet": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The write-only settings that have a stored value."
           },
           "settingsVersion": {
             "type": "integer",
@@ -4198,11 +4214,12 @@
           "name",
           "driverType",
           "settings",
+          "secretsSet",
           "settingsVersion",
           "createdAt",
           "updatedAt"
         ],
-        "description": "A printer's stored config. Settings are stored with every default filled in."
+        "description": "A printer's stored config. Settings are stored with every default filled in; write-only ones are never returned."
       },
       "PrinterFile": {
         "type": "object",
@@ -4821,7 +4838,7 @@
             "description": "1–64 characters after trimming, with no control characters. Unique, ignoring the case of A–Z."
           },
           "settings": {
-            "description": "Fields to change; the rest keep their stored values. Changing settings restarts the driver, and is refused (409 job_active) while a job is active.",
+            "description": "Fields to change; the rest keep their stored values. A write-only field left out or empty keeps its stored value, and a new value replaces it. Changing settings restarts the driver, and is refused (409 job_active) while a job is active.",
             "type": "object",
             "propertyNames": {
               "type": "string"

@@ -537,7 +537,9 @@ export interface components {
             type: string;
             name: string;
             description: string;
-            /** @description The settings' JSON Schema (draft 2020-12), describing the input: fields with a default are optional and carry it. */
+            /** @description Short plain-text steps to follow before adding a printer of this type, shown above the add form. Empty when there are none. */
+            setupHelp: string[];
+            /** @description The settings' JSON Schema (draft 2020-12), describing the input: fields with a default are optional and carry it. Secrets are marked writeOnly. */
             settingsSchema: {
                 [key: string]: components["schemas"]["JsonValue"];
             };
@@ -652,7 +654,7 @@ export interface components {
             /** @description 1–64 characters after trimming, with no control characters. Unique, ignoring the case of A–Z. */
             name: string;
             driverType: string;
-            /** @description Settings fields, checked against the driver type's settings schema. */
+            /** @description Settings fields, checked against the driver type's settings schema. An empty string for a write-only field counts as left out. */
             settings?: {
                 [key: string]: components["schemas"]["JsonValue"];
             };
@@ -738,14 +740,17 @@ export interface components {
             };
         };
         PrinterCommand: components["schemas"]["PrintStartCommand"] | components["schemas"]["PrintPauseCommand"] | components["schemas"]["PrintResumeCommand"] | components["schemas"]["PrintCancelCommand"] | components["schemas"]["MotionHomeCommand"] | components["schemas"]["MotionMoveCommand"] | components["schemas"]["TemperatureSetCommand"] | components["schemas"]["FanSetCommand"] | components["schemas"]["FileUploadCommand"] | components["schemas"]["ExtensionInvokeCommand"];
-        /** @description A printer's stored config. Settings are stored with every default filled in. */
+        /** @description A printer's stored config. Settings are stored with every default filled in; write-only ones are never returned. */
         PrinterConfig: {
             id: string;
             name: string;
             driverType: string;
+            /** @description Every stored setting except the write-only ones, which are never returned. Empty if the driver type isn't available. */
             settings: {
                 [key: string]: string | number | boolean;
             };
+            /** @description The write-only settings that have a stored value. */
+            secretsSet: string[];
             settingsVersion: number;
             /** Format: date-time */
             createdAt: string;
@@ -891,7 +896,7 @@ export interface components {
         PrinterUpdateRequest: {
             /** @description 1–64 characters after trimming, with no control characters. Unique, ignoring the case of A–Z. */
             name?: string;
-            /** @description Fields to change; the rest keep their stored values. Changing settings restarts the driver, and is refused (409 job_active) while a job is active. */
+            /** @description Fields to change; the rest keep their stored values. A write-only field left out or empty keeps its stored value, and a new value replaces it. Changing settings restarts the driver, and is refused (409 job_active) while a job is active. */
             settings?: {
                 [key: string]: components["schemas"]["JsonValue"];
             };

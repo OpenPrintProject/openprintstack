@@ -36,6 +36,7 @@ describe("the simulated driver module", () => {
       buildVolumeZMm: number;
       maxMoveSpeedMmS: number;
       cameraEnabled: boolean;
+      accessCode?: string | undefined;
     }>();
   });
 

@@ -45,8 +45,10 @@ import { SIMULATED_DEFAULTS, SIMULATED_DRIVER_TYPE } from "./fixtures.ts";
 // when all goes well: driver types, add, config, rename and settings, delete,
 // files, cameras, uploads, commands and the simulator's (a command publishes
 // command.requested and command.result, by the session's user, as the
-// server's do). A test that wants the server to refuse something sets an
-// override; the server's own checks are tested in the server.
+// server's do). As the server does, it never answers a write-only setting's
+// value: configs list the stored ones in `secretsSet`, and an edit leaving
+// one empty keeps it. A test that wants the server to refuse something sets
+// an override; the server's own checks are tested in the server.
 //
 // `publish` plays the printer, and `publishGlobal` the server: the event is
 // stored in the event log and goes to every topic the page has subscribed
@@ -136,10 +138,14 @@ export class FakeServer {
     return server;
   }
 
-  /** A printer, with its stored settings (the simulator's defaults). */
+  /**
+   * A printer, with its stored settings (the simulator's defaults) and the
+   * secrets it has stored.
+   */
   addPrinter(
     snapshot: PrinterSnapshot,
     settings: PrinterConfig["settings"] = { ...SIMULATED_DEFAULTS },
+    secretsSet: string[] = [],
   ): void {
     this.printers.push(snapshot);
     this.configs.set(snapshot.printer.id, {
@@ -147,6 +153,7 @@ export class FakeServer {
       name: snapshot.printer.name,
       driverType: snapshot.printer.driverType,
       settings,
+      secretsSet,
       settingsVersion: 1,
       createdAt: TS,
       updatedAt: TS,
@@ -489,6 +496,7 @@ export class FakeServer {
       .parse(body);
     if (this.#nameTaken(name)) return nameTaken();
     const id = `printer-${this.configs.size + 1}`;
+    const secrets = this.#secrets(driverType, settings);
     this.addPrinter(
       {
         printer: { id, name, driverType },
@@ -509,7 +517,8 @@ export class FakeServer {
         },
         seq: this.#seq,
       },
-      { ...SIMULATED_DEFAULTS, ...settings },
+      { ...SIMULATED_DEFAULTS, ...secrets.settings },
+      secrets.set,
     );
     return json(201, this.configs.get(id));
   }
@@ -526,10 +535,12 @@ export class FakeServer {
     if (name !== undefined && name !== config.name && this.#nameTaken(name)) {
       return nameTaken();
     }
+    const secrets = this.#secrets(config.driverType, settings ?? {});
     const updated: PrinterConfig = {
       ...config,
       name: name ?? config.name,
-      settings: { ...config.settings, ...settings },
+      settings: { ...config.settings, ...secrets.settings },
+      secretsSet: [...new Set([...config.secretsSet, ...secrets.set])],
       settingsVersion:
         config.settingsVersion + (settings === undefined ? 0 : 1),
     };
@@ -540,6 +551,31 @@ export class FakeServer {
         : each,
     );
     return json(200, updated);
+  }
+
+  /** Settings without their secrets, and the secrets given a value. */
+  #secrets(
+    driverType: string,
+    settings: PrinterConfig["settings"],
+  ): { settings: PrinterConfig["settings"]; set: string[] } {
+    const type = this.driverTypes.find((each) => each.type === driverType);
+    const properties = (type?.settingsSchema.properties ?? {}) as Record<
+      string,
+      { writeOnly?: unknown }
+    >;
+    const writeOnly = new Set(
+      Object.keys(properties).filter(
+        (key) => properties[key]?.writeOnly === true,
+      ),
+    );
+    return {
+      settings: Object.fromEntries(
+        Object.entries(settings).filter(([key]) => !writeOnly.has(key)),
+      ),
+      set: Object.entries(settings)
+        .filter(([key, value]) => writeOnly.has(key) && value !== "")
+        .map(([key]) => key),
+    };
   }
 
   #exists(printerId: string): boolean {
