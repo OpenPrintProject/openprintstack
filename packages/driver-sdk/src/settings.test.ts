@@ -5,7 +5,12 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { fakeDriver } from "./fake-driver.ts";
-import { defaultSettings, defineDriver, settingsJsonSchema } from "./index.ts";
+import {
+  defaultSettings,
+  defineDriver,
+  settingsJsonSchema,
+  writeOnlySettings,
+} from "./index.ts";
 
 const networked = defineDriver({
   ...fakeDriver,
@@ -13,7 +18,8 @@ const networked = defineDriver({
     host: z.string().min(1).describe("Printer address"),
     port: z.int().default(7125),
     mode: z.enum(["lan", "cloud"]).default("lan"),
-    accessCode: z.string().optional(),
+    accessCode: z.string().optional().meta({ writeOnly: true }),
+    apiKey: z.string().meta({ writeOnly: true }).optional(),
   }),
   initialCapabilities: () =>
     fakeDriver.initialCapabilities({
@@ -36,7 +42,8 @@ describe("settingsJsonSchema", () => {
       host: { type: "string", minLength: 1, description: "Printer address" },
       port: { type: "integer", default: 7125 },
       mode: { type: "string", enum: ["lan", "cloud"], default: "lan" },
-      accessCode: { type: "string" },
+      accessCode: { type: "string", writeOnly: true },
+      apiKey: { type: "string", writeOnly: true },
     });
   });
 });
@@ -52,5 +59,15 @@ describe("defaultSettings", () => {
       cameraEnabled: true,
       reachable: true,
     });
+  });
+});
+
+describe("writeOnlySettings", () => {
+  it("returns the fields marked write-only, before or after optional()", () => {
+    expect(writeOnlySettings(networked)).toEqual(["accessCode", "apiKey"]);
+  });
+
+  it("is empty when nothing is write-only", () => {
+    expect(writeOnlySettings(fakeDriver)).toEqual([]);
   });
 });

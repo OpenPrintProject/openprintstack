@@ -11,7 +11,11 @@ import type {
   PrinterDriver,
   StartPrintRequest,
 } from "../contract.ts";
-import { fakeDriver, patchFakeDriver } from "../fake-driver.ts";
+import {
+  fakeDriver,
+  fakeSettingsSchema,
+  patchFakeDriver,
+} from "../fake-driver.ts";
 import { CONFORMANCE_CHECKS } from "./index.ts";
 
 const created: PrinterDriver[] = [];
@@ -67,6 +71,32 @@ describe("the conformance checks", () => {
   });
 
   it.each([
+    ["an empty list", []],
+    ["an empty step", ["Switch on LAN mode.", ""]],
+  ])("fail setup help with %s", async (_name, setupHelp) => {
+    const module = {
+      ...fakeDriver,
+      manifest: { ...fakeDriver.manifest, setupHelp },
+    } as DriverModule;
+
+    await expect(runCheck("has a valid manifest", module)).rejects.toThrow(
+      /setupHelp/,
+    );
+  });
+
+  it("pass a manifest with setup help", async () => {
+    const module = {
+      ...fakeDriver,
+      manifest: {
+        ...fakeDriver.manifest,
+        setupHelp: ["Switch on LAN mode.", "Set an access code."],
+      },
+    } as DriverModule;
+
+    await runCheck("has a valid manifest", module);
+  });
+
+  it.each([
     ["a nested object", z.object({ address: z.object({ host: z.string() }) })],
     ["a nullable field", z.object({ host: z.string().nullable() })],
     ["an array", z.object({ hosts: z.array(z.string()) })],
@@ -80,6 +110,39 @@ describe("the conformance checks", () => {
         module,
       ),
     ).rejects.toThrow();
+  });
+
+  describe("marks only plain strings with no default as write-only", () => {
+    const check = "marks only plain strings with no default as write-only";
+    const writeOnly = { writeOnly: true };
+
+    it("passes required and optional write-only strings", async () => {
+      const module = {
+        ...fakeDriver,
+        settingsSchema: fakeSettingsSchema.extend({
+          accessCode: z.string().min(1).meta(writeOnly),
+          apiKey: z.string().optional().meta(writeOnly),
+        }),
+      } as unknown as DriverModule;
+
+      await runCheck(check, module);
+    });
+
+    it.each([
+      ["a number", z.number().meta(writeOnly)],
+      ["a boolean", z.boolean().optional().meta(writeOnly)],
+      ["an enum", z.enum(["a", "b"]).meta(writeOnly)],
+      ["a literal", z.literal("secret").meta(writeOnly)],
+      ["a default", z.string().default("1234").meta(writeOnly)],
+      ["writeOnly that isn't a boolean", z.string().meta({ writeOnly: "yes" })],
+    ])("fails %s", async (_name, field) => {
+      const module = {
+        ...fakeDriver,
+        settingsSchema: fakeSettingsSchema.extend({ accessCode: field }),
+      } as unknown as DriverModule;
+
+      await expect(runCheck(check, module)).rejects.toThrow(/accessCode/);
+    });
   });
 
   it("fail a default that breaks its own field's rules", async () => {

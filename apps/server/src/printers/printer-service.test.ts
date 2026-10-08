@@ -663,6 +663,137 @@ describe("PrinterService.update", () => {
 
     expect(statusOf(printer.id)).toBe("idle");
   });
+
+  it("merges the settings given over the stored ones", async () => {
+    const { added, drivers, service } = await setup();
+    const { printer } = await added("Bench", { nozzleMaxC: 280 });
+
+    const updated = await service.update(
+      printer.id,
+      { settings: { failCreate: false, accessCode: "1234" } },
+      USER_ID,
+    );
+
+    expect(updated.settings).toEqual({
+      nozzleMaxC: 280,
+      failCreate: false,
+      accessCode: "1234",
+    });
+    expect(drivers.latest(printer.id).init.settings).toEqual(updated.settings);
+  });
+});
+
+describe("PrinterService: write-only settings", () => {
+  const SECRET = { accessCode: "1234" };
+
+  it("stores a secret when adding, and gives it to the driver", async () => {
+    const { added } = await setup();
+
+    const { printer, driver } = await added("Bench", SECRET);
+
+    expect(printer.settings).toEqual({ ...DEFAULTS, ...SECRET });
+    expect(driver.init.settings).toEqual({ ...DEFAULTS, ...SECRET });
+  });
+
+  it("stores nothing for an empty secret when adding", async () => {
+    const { added } = await setup();
+
+    const { printer } = await added("Bench", { accessCode: "" });
+
+    expect(printer.settings).toEqual(DEFAULTS);
+  });
+
+  it.each([
+    ["an empty secret", { accessCode: "" }],
+    ["no secret", {}],
+  ])(
+    "keeps the stored secret when the edit has %s, without restarting",
+    async (_name, settings) => {
+      const { added, events, repos, service } = await setup();
+      const { printer, driver } = await added("Bench", SECRET);
+
+      expect(await service.update(printer.id, { settings }, USER_ID)).toEqual(
+        printer,
+      );
+
+      expect(repos.printers.findById(printer.id)?.settings).toMatchObject(
+        SECRET,
+      );
+      expect(events).toEqual([]);
+      expect(driver.ops()).toEqual(["connect"]);
+    },
+  );
+
+  it("keeps the stored secret while other settings change", async () => {
+    const { added, drivers, service } = await setup();
+    const { printer } = await added("Bench", SECRET);
+
+    const updated = await service.update(
+      printer.id,
+      { settings: { nozzleMaxC: 280, accessCode: "" } },
+      USER_ID,
+    );
+
+    expect(updated.settings).toEqual({
+      ...DEFAULTS,
+      nozzleMaxC: 280,
+      ...SECRET,
+    });
+    expect(drivers.latest(printer.id).init.settings).toMatchObject(SECRET);
+  });
+
+  it("replaces the stored secret with a new one, restarting the driver", async () => {
+    const { added, drivers, published, service } = await setup();
+    const { printer, driver } = await added("Bench", SECRET);
+
+    const updated = await service.update(
+      printer.id,
+      { settings: { accessCode: "5678" } },
+      USER_ID,
+    );
+
+    expect(updated).toMatchObject({
+      settings: { accessCode: "5678" },
+      settingsVersion: 2,
+    });
+    expect(published()[0]).toEqual({
+      type: "printer.updated",
+      payload: { changedFields: ["settings"] },
+    });
+    expect(driver.ops()).toEqual(["connect", "disconnect", "dispose"]);
+    expect(drivers.latest(printer.id).init.settings).toMatchObject({
+      accessCode: "5678",
+    });
+  });
+
+  it("gives the config without secrets, naming the ones that are set", async () => {
+    const { added, service } = await setup();
+    const { printer: withSecret } = await added("Bench", SECRET);
+    const { printer: without } = await added("Shelf");
+
+    expect(await service.config(withSecret)).toEqual({
+      settings: DEFAULTS,
+      secretsSet: ["accessCode"],
+    });
+    expect(await service.config(without)).toEqual({
+      settings: DEFAULTS,
+      secretsSet: [],
+    });
+  });
+
+  it("gives no settings at all when the driver type isn't available", async () => {
+    const { service, stored } = await setup();
+    const printer = stored(
+      "Gone",
+      { host: "h", accessCode: "1234" },
+      "klipper",
+    );
+
+    expect(await service.config(printer)).toEqual({
+      settings: {},
+      secretsSet: [],
+    });
+  });
 });
 
 describe("PrinterService.remove", () => {

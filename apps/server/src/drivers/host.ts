@@ -24,11 +24,13 @@ import {
   type PrinterStatus,
   type Telemetry,
 } from "@openprintstack/protocol";
+import pino from "pino";
 import { z } from "zod";
 
 import type { EventBus } from "../bus/bus.ts";
 import type { PrinterSettings } from "../db/schema.ts";
 import { type Logger, printerLogger } from "../logger.ts";
+import { redactSecrets, secretValues } from "./secrets.ts";
 
 // One printer's driver, for as long as the server runs. Each start creates the
 // driver behind its own transport and client; each stop disconnects, disposes
@@ -45,6 +47,11 @@ import { type Logger, printerLogger } from "../logger.ts";
 //
 // A message the client can't accept raises a `driver_protocol_error` alert, at
 // most one a minute per printer.
+//
+// The printer's secrets (its write-only settings' values, see secrets.ts) are
+// replaced with "[Redacted]" in everything that comes from the driver before
+// it's published, logged or answered: its messages, its errors, and the
+// errors this host logs.
 
 /** The longest a driver call may take, except an upload. */
 export const CALL_TIMEOUT_MS = 10_000;
@@ -134,6 +141,8 @@ export class DriverHost {
   /** The capabilities last published, carried across restarts. */
   #capabilities: Capabilities | null = null;
   #client: DriverClient | null = null;
+  /** The running driver's secret values, set by each start. */
+  #secrets: readonly string[] = [];
   #starting = false;
   #lastAlertAt: number | null = null;
   #suppressedAlerts = 0;
@@ -141,11 +150,24 @@ export class DriverHost {
   constructor(options: DriverHostOptions) {
     this.printerId = options.printerId;
     this.#bus = options.bus;
-    this.#logger = options.logger.child({
-      component: "driver-host",
-      printerId: options.printerId,
-    });
-    this.#driverLogger = printerLogger(options.logger, options.printerId);
+    // Errors are logged as pino writes them, then redacted, so their
+    // messages, stacks and causes are covered.
+    const redacting = {
+      serializers: {
+        err: (error: unknown) =>
+          this.#redact(
+            error instanceof Error ? pino.stdSerializers.err(error) : error,
+          ),
+      },
+    };
+    this.#logger = options.logger.child(
+      { component: "driver-host", printerId: options.printerId },
+      redacting,
+    );
+    this.#driverLogger = printerLogger(options.logger, options.printerId).child(
+      {},
+      redacting,
+    );
     this.#clone = options.clone ?? true;
     this.#now = options.now ?? (() => Date.now());
   }
@@ -189,12 +211,13 @@ export class DriverHost {
     let capabilities: Capabilities;
     try {
       run = await prepare();
+      this.#secrets = secretValues(run.module, run.settings);
       capabilities = initialCapabilities(run);
     } catch (error) {
       this.#failToStart(error);
       return;
     }
-    this.#publishCapabilities(capabilities, SYSTEM);
+    this.#publishCapabilities(this.#redact(capabilities), SYSTEM);
 
     const transport = createLoopbackTransport({ clone: this.#clone });
     const client = new DriverClient(transport.host, {
@@ -266,7 +289,8 @@ export class DriverHost {
 
   /**
    * Calls the running driver. Fails as `offline` if none is running, and as
-   * `timeout` after `timeoutMs`.
+   * `timeout` after `timeoutMs`. Secrets are redacted from its errors (not
+   * from its results).
    */
   call<C extends HostCall>(
     call: C,
@@ -277,7 +301,26 @@ export class DriverHost {
         new DriverError("offline", "The printer's driver isn't running."),
       );
     }
-    return this.#client.call(call, { timeoutMs });
+    return this.#client.call(call, { timeoutMs }).catch((error: unknown) => {
+      throw this.#redactError(error);
+    });
+  }
+
+  #redact<T>(value: T): T {
+    return redactSecrets(value, this.#secrets);
+  }
+
+  /**
+   * The error, or a copy without the secrets if its message has any. The
+   * copy has no cause, which could hold them too.
+   */
+  #redactError(error: unknown): unknown {
+    if (!(error instanceof Error)) return this.#redact(error);
+    const message = this.#redact(error.message);
+    if (message === error.message) return error;
+    return error instanceof DriverError
+      ? new DriverError(error.code, message)
+      : new Error(message);
   }
 
   async #release(
@@ -298,7 +341,7 @@ export class DriverHost {
   }
 
   #failToStart(error: unknown): void {
-    const info = startErrorInfo(error);
+    const info = this.#redact(startErrorInfo(error));
     this.#logger.error(
       { err: error, code: info.code },
       "The driver couldn't start",
@@ -317,7 +360,7 @@ export class DriverHost {
   #receive(message: DriverMessage): void {
     // Runs on a microtask, so anything thrown here would crash the server.
     try {
-      this.#publishMessage(message);
+      this.#publishMessage(this.#redact(message));
     } catch (error) {
       this.#logger.error(
         { err: error, messageType: message.type },
@@ -436,7 +479,7 @@ export class DriverHost {
     try {
       // What the driver sent isn't logged: it could be huge (a snapshot).
       this.#logger.warn(
-        { problem: error.message },
+        { problem: this.#redact(error.message) },
         "The driver sent a message the server couldn't read",
       );
       const now = this.#now();

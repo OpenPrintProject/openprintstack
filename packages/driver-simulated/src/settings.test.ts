@@ -5,6 +5,7 @@ import {
   defaultSettings,
   DriverManifest,
   settingsJsonSchema,
+  writeOnlySettings,
 } from "@openprintstack/driver-sdk";
 import { Capabilities, CommandKind } from "@openprintstack/protocol";
 import { describe, expect, it } from "vitest";
@@ -18,6 +19,7 @@ describe("the module", () => {
     expect(DriverManifest.parse(simulatedDriver.manifest)).toMatchObject({
       type: "simulated",
       name: "Simulated printer",
+      setupHelp: [expect.any(String), expect.any(String)],
     });
   });
 });
@@ -50,8 +52,19 @@ describe("settings", () => {
       )
       .map(([key]) => key);
 
-    expect(Object.keys(properties)).toHaveLength(10);
+    expect(Object.keys(properties)).toHaveLength(11);
     expect(unlabelled).toEqual([]);
+  });
+
+  it("make the optional access code write-only", () => {
+    expect(writeOnlySettings(simulatedDriver)).toEqual(["accessCode"]);
+    expect(simulatedSettingsSchema.parse({})).not.toHaveProperty("accessCode");
+    expect(simulatedSettingsSchema.parse({ accessCode: "1234" })).toMatchObject(
+      { accessCode: "1234" },
+    );
+    expect(
+      simulatedSettingsSchema.safeParse({ accessCode: "x".repeat(65) }).success,
+    ).toBe(false);
   });
 
   const bounds: [keyof SettingsInput, number, number][] = [

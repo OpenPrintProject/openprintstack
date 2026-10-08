@@ -35,3 +35,18 @@ export function defaultSettings<S extends SettingsSchema>(
     ),
   ) as Partial<z.output<S>>;
 }
+
+/**
+ * The keys of the settings fields marked `.meta({ writeOnly: true })`, in the
+ * schema's order. Their values are secrets: the server stores them and gives
+ * them to the driver, but never returns, publishes or logs them.
+ *
+ * Read from the JSON Schema, so the mark counts wherever it sits on the
+ * field (before or after `.optional()`).
+ */
+export function writeOnlySettings(module: DriverModule): string[] {
+  const properties = settingsJsonSchema(module).properties ?? {};
+  return Object.entries(properties).flatMap(([key, property]) =>
+    typeof property === "object" && property.writeOnly === true ? [key] : [],
+  );
+}

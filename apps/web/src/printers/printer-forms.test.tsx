@@ -1,14 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Open Print Stack contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import type userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { apiError, FakeServer } from "../test/fake-server.ts";
-import { SIMULATED_DEFAULTS, SIMULATED_DRIVER_TYPE } from "../test/fixtures.ts";
+import {
+  SIMULATED_DEFAULTS,
+  SIMULATED_DRIVER_TYPE,
+  SIMULATED_SETUP_HELP,
+} from "../test/fixtures.ts";
 import { serverWith, snapshotOf } from "../test/printers.ts";
 import { heading, location, renderApp } from "../test/render-app.tsx";
+import { SECRET_KEPT } from "./printer-form.tsx";
 
 // Adding and editing printers: the form generated from the driver type's
 // settings schema, checked before sending, and the server's answers.
@@ -28,6 +33,18 @@ async function replace(user: User, label: string, text: string) {
 
 async function submit(user: User, name: string) {
   await user.click(screen.getByRole("button", { name }));
+}
+
+const SETUP_HELP = "Before you add it";
+
+/** The setup help's steps, or null when there's none. */
+function setupSteps(): string[] | null {
+  const title = screen.queryByRole("heading", { name: SETUP_HELP });
+  const section = title?.closest("section");
+  if (section === null || section === undefined) return null;
+  return within(section)
+    .getAllByRole("listitem")
+    .map((item) => item.textContent);
 }
 
 describe("adding a printer", () => {
@@ -76,6 +93,42 @@ describe("adding a printer", () => {
           speedMultiplier: 60,
           cameraEnabled: false,
         },
+      },
+    ]);
+  });
+
+  it("shows the printer type's setup help before its settings", async () => {
+    renderApp(FakeServer.withUser({ loggedIn: true }), "/printers/new");
+    await heading(ADD);
+    await screen.findByLabelText("Name");
+
+    expect(setupSteps()).toEqual(SIMULATED_SETUP_HELP);
+    const help = screen.getByRole("heading", { name: SETUP_HELP });
+    expect(
+      help.compareDocumentPosition(field("Print duration (s)")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("makes the access code a password field, and sends what's typed", async () => {
+    const server = FakeServer.withUser({ loggedIn: true });
+    const { user } = renderApp(server, "/printers/new");
+    await heading(ADD);
+    await user.type(await screen.findByLabelText("Name"), "Sim 1");
+
+    const code = field("Access code");
+    expect(code.type).toBe("password");
+    expect(code.autocomplete).toBe("new-password");
+    expect(code.placeholder).toBe("");
+    await user.type(code, "1234");
+    await submit(user, "Add printer");
+
+    await heading("Sim 1");
+    expect(server.requestsTo("POST /api/printers")).toEqual([
+      {
+        name: "Sim 1",
+        driverType: "simulated",
+        settings: { ...SIMULATED_DEFAULTS, accessCode: "1234" },
       },
     ]);
   });
@@ -240,6 +293,7 @@ describe("adding a printer", () => {
         type: "networked",
         name: "Networked printer",
         description: "One on the network.",
+        setupHelp: [],
         settingsSchema: {
           type: "object",
           properties: {
@@ -261,6 +315,7 @@ describe("adding a printer", () => {
     );
     expect(screen.queryByLabelText("Speed multiplier")).toBeNull();
     expect(screen.getByText("One on the network.")).toBeDefined();
+    expect(setupSteps()).toBeNull();
     await submit(user, "Add printer");
     expect(await screen.findByText("Enter a value.")).toBeDefined();
 
@@ -349,6 +404,67 @@ describe("editing a printer", () => {
     expect(server.requestsTo("PATCH /api/printers/p1")).toEqual([
       { settings: { speedMultiplier: 2 } },
     ]);
+  });
+
+  describe("with an access code stored", () => {
+    function withSecret() {
+      const server = editing();
+      server.configs.set("p1", {
+        ...server.configs.get("p1")!,
+        secretsSet: ["accessCode"],
+      });
+      return server;
+    }
+
+    it("leaves it blank, saying it's kept, and shows no setup help", async () => {
+      renderApp(withSecret(), "/printers/p1/edit");
+      await heading(EDIT);
+      await screen.findByLabelText("Name");
+
+      const code = field("Access code");
+      expect(code.type).toBe("password");
+      expect(code.value).toBe("");
+      expect(code.placeholder).toBe(SECRET_KEPT);
+      expect(SECRET_KEPT).toBe("•••• (leave blank to keep)");
+      expect(setupSteps()).toBeNull();
+    });
+
+    it("doesn't send it when left blank", async () => {
+      const server = withSecret();
+      const { user } = renderApp(server, "/printers/p1/edit");
+      await heading(EDIT);
+
+      await replace(user, "Speed multiplier", "2");
+      await submit(user, "Save");
+
+      await heading("Print");
+      expect(server.requestsTo("PATCH /api/printers/p1")).toEqual([
+        { settings: { speedMultiplier: 2 } },
+      ]);
+    });
+
+    it("sends a new one", async () => {
+      const server = withSecret();
+      const { user } = renderApp(server, "/printers/p1/edit");
+      await heading(EDIT);
+
+      await user.type(await screen.findByLabelText("Access code"), "5678");
+      await submit(user, "Save");
+
+      await heading("Print");
+      expect(server.requestsTo("PATCH /api/printers/p1")).toEqual([
+        { settings: { accessCode: "5678" } },
+      ]);
+      expect(server.configs.get("p1")?.secretsSet).toEqual(["accessCode"]);
+    });
+  });
+
+  it("gives an access code that isn't stored no placeholder", async () => {
+    renderApp(editing(), "/printers/p1/edit");
+    await heading(EDIT);
+    await screen.findByLabelText("Name");
+
+    expect(field("Access code").placeholder).toBe("");
   });
 
   it("sends nothing when nothing changed", async () => {

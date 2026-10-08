@@ -84,6 +84,7 @@ function EditForm({
         name: config.name,
         driverType: config.driverType,
         settings: config.settings,
+        secretsSet: config.secretsSet,
       }}
       settingsLocked={settingsLocked}
       submitLabel="Save"
@@ -112,7 +113,9 @@ function EditForm({
 
 /**
  * What to send: the name if it changed, and the settings that changed (the
- * server merges them into the stored ones), unless settings are locked.
+ * server merges them into the stored ones), unless settings are locked. A
+ * secret typed in is always sent, as the stored one is never known; one left
+ * blank isn't, which keeps it.
  */
 export function changes(
   config: Pick<PrinterConfig, "name" | "settings">,

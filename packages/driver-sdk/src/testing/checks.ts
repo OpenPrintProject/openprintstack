@@ -79,6 +79,37 @@ export const CONFORMANCE_CHECKS: readonly ConformanceCheck[] = [
     },
   },
   {
+    name: "marks only plain strings with no default as write-only",
+    run: ({ module }) => {
+      const properties = settingsJsonSchema(module).properties ?? {};
+      const marked = Object.entries(properties).flatMap(([key, property]) =>
+        typeof property === "object" && "writeOnly" in property
+          ? [[key, property] as const]
+          : [],
+      );
+      const notBoolean = marked
+        .filter(([, property]) => typeof property.writeOnly !== "boolean")
+        .map(([key]) => key);
+      expect(notBoolean, "writeOnly must be true or false").toEqual([]);
+      // A default is published with the schema, and a choice from a list
+      // isn't a secret, so neither can be write-only.
+      const wrong = marked
+        .filter(
+          ([, property]) =>
+            property.writeOnly === true &&
+            (property.type !== "string" ||
+              "enum" in property ||
+              "const" in property ||
+              "default" in property),
+        )
+        .map(([key]) => key);
+      expect(
+        wrong,
+        "Write-only settings must be strings with no default and no enum",
+      ).toEqual([]);
+    },
+  },
+  {
     name: "accepts the fixture's settings and its own defaults",
     run: ({ module, fixture }) => {
       module.settingsSchema.parse(fixture.settings);

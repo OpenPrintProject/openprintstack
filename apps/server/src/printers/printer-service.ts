@@ -3,7 +3,11 @@
 
 import { isDeepStrictEqual } from "node:util";
 
-import type { DriverModule, DriverResult } from "@openprintstack/driver-sdk";
+import {
+  type DriverModule,
+  type DriverResult,
+  writeOnlySettings,
+} from "@openprintstack/driver-sdk";
 import { hasActiveJob } from "@openprintstack/protocol";
 import { SqliteError } from "better-sqlite3";
 import { z } from "zod";
@@ -19,6 +23,11 @@ import {
   type HostCall,
 } from "../drivers/host.ts";
 import type { DriverRegistry } from "../drivers/registry.ts";
+import {
+  secretsSet,
+  withoutBlankSecrets,
+  withoutSecrets,
+} from "../drivers/secrets.ts";
 import type { Logger } from "../logger.ts";
 import {
   type DataPaths,
@@ -35,6 +44,10 @@ import type { StateStore } from "../state/store.ts";
 //   settings  refused during a job; row (version + 1) → printer.updated →
 //             stop → start
 //   delete    stop → folder removed → row deleted → printer.removed
+//
+// Settings changes are merged over the stored settings. A write-only field
+// (a secret, see drivers/secrets.ts) given as "" counts as not given, so an
+// edit keeps the stored value; `config` never includes their values.
 //
 // Each printer's lifecycle steps run one at a time, so a delete can't overlap
 // a restart. Starting never throws: a driver that can't run leaves its
@@ -71,15 +84,29 @@ export class PrinterServiceError extends Error {
 export type NewPrinterInput = {
   name: string;
   driverType: string;
-  /** As the user entered them; defaults are filled in before storing. */
+  /**
+   * As the user entered them; defaults are filled in before storing. An
+   * empty write-only field counts as left out.
+   */
   settings: unknown;
   userId: string;
 };
 
 export type PrinterUpdate = {
   name?: string;
-  /** As the user entered them, replacing the stored settings. */
-  settings?: unknown;
+  /**
+   * The fields to change, as the user entered them, merged over the stored
+   * settings. An empty write-only field keeps its stored value.
+   */
+  settings?: Readonly<Record<string, unknown>>;
+};
+
+/** A printer's settings as the API shows them: never its secrets. */
+export type PrinterConfigSettings = {
+  /** Every setting but the write-only ones. */
+  settings: PrinterSettings;
+  /** The write-only fields that have a stored value. */
+  secretsSet: string[];
 };
 
 export type PrinterServiceOptions = {
@@ -159,7 +186,10 @@ export class PrinterService {
    */
   async add(input: NewPrinterInput): Promise<Printer> {
     const module = await this.#module(input.driverType);
-    const settings = parseSettings(module, input.settings);
+    const settings = parseSettings(
+      module,
+      withoutBlankSecrets(input.settings, writeOnlySettings(module)),
+    );
     const printer = this.#write(() =>
       this.#printers.create({
         name: input.name,
@@ -180,10 +210,11 @@ export class PrinterService {
   }
 
   /**
-   * Renames the printer and/or replaces its settings. A rename applies at
-   * once. New settings restart the driver, and are refused while a job is
-   * active. Settings equal to the stored ones (after parsing) aren't a change.
-   * Resolves with the row, after any restart's first connect attempt.
+   * Renames the printer and/or changes its settings. A rename applies at
+   * once. Changed settings restart the driver, and are refused while a job is
+   * active. Settings equal to the stored ones (after merging and parsing)
+   * aren't a change. Resolves with the row, after any restart's first connect
+   * attempt.
    */
   async update(
     printerId: string,
@@ -199,7 +230,10 @@ export class PrinterService {
       }
       if (update.settings !== undefined) {
         const module = await this.#module(printer.driverType);
-        const settings = parseSettings(module, update.settings);
+        const settings = parseSettings(module, {
+          ...printer.settings,
+          ...withoutBlankSecrets(update.settings, writeOnlySettings(module)),
+        });
         const stored = module.settingsSchema.safeParse(printer.settings);
         if (!stored.success || !isDeepStrictEqual(settings, stored.data)) {
           this.#refuseDuringJob(printerId);
@@ -250,6 +284,24 @@ export class PrinterService {
         payload: { name: printer.name },
       });
     });
+  }
+
+  /**
+   * The printer's settings without their secrets, and which secrets are set.
+   * If its driver type isn't available, which fields are secret isn't known,
+   * so no settings are given at all.
+   */
+  async config(printer: Printer): Promise<PrinterConfigSettings> {
+    let writeOnly: string[];
+    try {
+      writeOnly = writeOnlySettings(await this.#module(printer.driverType));
+    } catch {
+      return { settings: {}, secretsSet: [] };
+    }
+    return {
+      settings: withoutSecrets(printer.settings, writeOnly),
+      secretsSet: secretsSet(printer.settings, writeOnly),
+    };
   }
 
   /**

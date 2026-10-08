@@ -10,7 +10,8 @@ import { z } from "zod";
 // boolean. This module turns the schema into the form's fields, and checks
 // the form's values by the same rules before they're sent:
 //
-//   string    a text field: minLength, maxLength, pattern
+//   string    a text field: minLength, maxLength, pattern; a password
+//             field if it's `writeOnly` (a secret, such as an access code)
 //   enum      a select (a string with `enum`)
 //   number    a number field: minimum, maximum, exclusiveMinimum,
 //   integer   exclusiveMaximum; an integer must be whole
@@ -20,6 +21,10 @@ import { z } from "zod";
 // default; one listed in `required` must be filled in, and an optional one
 // left empty isn't sent. Any other keyword makes `settingsFields` throw, so a
 // driver needing more is noticed rather than its rule silently skipped.
+//
+// The server never sends a write-only field's value back, only whether one is
+// stored (`secretsSet`). So the field always starts empty, and when editing,
+// one that's stored may be left empty to keep it.
 
 type FieldBase = {
   /** The settings key, e.g. `printDurationS`. */
@@ -31,6 +36,8 @@ type FieldBase = {
 
 export type StringField = FieldBase & {
   readonly kind: "string";
+  /** A secret: shown as a password field, and never sent back. */
+  readonly writeOnly: boolean;
   readonly default: string | undefined;
   readonly minLength: number | undefined;
   readonly maxLength: number | undefined;
@@ -83,7 +90,7 @@ const ROOT_KEYWORDS = new Set([
 const FIELD_KEYWORDS = ["type", "title", "description", "default"];
 
 const KEYWORDS_BY_TYPE: Record<string, readonly string[]> = {
-  string: ["minLength", "maxLength", "pattern", "enum"],
+  string: ["minLength", "maxLength", "pattern", "enum", "writeOnly"],
   number: ["minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"],
   integer: ["minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"],
   boolean: [],
@@ -201,7 +208,12 @@ function settingsField(
             `${where}'s options aren't a list of strings.`,
           );
         }
-        for (const keyword of ["minLength", "maxLength", "pattern"]) {
+        for (const keyword of [
+          "minLength",
+          "maxLength",
+          "pattern",
+          "writeOnly",
+        ]) {
           if (keyword in schema)
             throw unsupported(`${where} uses "${keyword}" with "enum"`);
         }
@@ -220,6 +232,9 @@ function settingsField(
       return {
         ...base,
         kind: "string",
+        writeOnly:
+          optional(schema.writeOnly, isBoolean, `${where}'s writeOnly`) ??
+          false,
         default: fieldDefault,
         minLength: optional(schema.minLength, isCount, `${where}'s minLength`),
         maxLength: optional(schema.maxLength, isCount, `${where}'s maxLength`),
@@ -231,7 +246,8 @@ function settingsField(
 
 /**
  * The form's starting values: the stored settings (when editing), else each
- * field's default, else empty (off for a switch).
+ * field's default, else empty (off for a switch). Write-only fields always
+ * start empty.
  */
 export function initialValues(
   fields: readonly SettingsField[],
@@ -239,6 +255,7 @@ export function initialValues(
 ): SettingsValues {
   return Object.fromEntries(
     fields.map((field): [string, string | boolean] => {
+      if (field.kind === "string" && field.writeOnly) return [field.key, ""];
       const value = settings[field.key] ?? field.default;
       switch (field.kind) {
         case "boolean":
@@ -254,13 +271,23 @@ export function initialValues(
 
 /**
  * Checks the form's values by the fields' rules, giving the settings to send:
- * numbers as numbers, and empty optional fields left out.
+ * numbers as numbers, and empty optional fields left out. When editing,
+ * `secretsSet` names the write-only fields with a stored value: those may be
+ * left empty (and so left out), which keeps the stored value.
  */
 export function settingsSchema(
   fields: readonly SettingsField[],
+  secretsSet: readonly string[] = [],
 ): z.ZodType<Settings, SettingsValues> {
   const shape = Object.fromEntries(
-    fields.map((field) => [field.key, fieldSchema(field)]),
+    fields.map((field) => [
+      field.key,
+      fieldSchema(
+        isStoredSecret(field, secretsSet)
+          ? { ...field, required: false }
+          : field,
+      ),
+    ]),
   );
   return z
     .object(shape)
@@ -270,6 +297,16 @@ export function settingsSchema(
           Object.entries(values).filter(([, value]) => value !== undefined),
         ) as Settings,
     ) as unknown as z.ZodType<Settings, SettingsValues>;
+}
+
+/** Whether the field is write-only and has a stored value. */
+export function isStoredSecret(
+  field: SettingsField,
+  secretsSet: readonly string[],
+): boolean {
+  return (
+    field.kind === "string" && field.writeOnly && secretsSet.includes(field.key)
+  );
 }
 
 function fieldSchema(field: SettingsField): z.ZodType {

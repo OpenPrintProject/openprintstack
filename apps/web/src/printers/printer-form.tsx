@@ -26,6 +26,7 @@ import {
 import type { DriverType } from "./api.ts";
 import {
   initialValues,
+  isStoredSecret,
   serverIssues,
   type Settings,
   type SettingsField,
@@ -39,6 +40,13 @@ import {
 // checked before sending, by protocol's name rules and the schema's; the
 // server's answer goes on its field (a taken name, an invalid setting) or,
 // for anything else, in an alert under the form.
+//
+// Adding, the type's setup help (if any) comes before its settings. A secret
+// (a write-only setting) is a password field; editing, one that's stored
+// says it's kept if left blank.
+
+/** The placeholder of a secret that's stored. */
+export const SECRET_KEPT = "•••• (leave blank to keep)";
 
 export type PrinterFormOutput = {
   name: string;
@@ -73,13 +81,18 @@ function fieldsOf(
 /** The form's field names. */
 type FieldName = "name" | `settings.${string}`;
 
-function formSchema(fields: readonly SettingsField[]) {
+function formSchema(
+  fields: readonly SettingsField[],
+  secretsSet: readonly string[],
+) {
   return z.object({
     name: PrinterName,
     driverType: z.string().min(1, { error: "Choose a printer type." }),
-    settings: settingsSchema(fields),
+    settings: settingsSchema(fields, secretsSet),
   });
 }
+
+const NO_SECRETS: readonly string[] = [];
 
 export function PrinterForm({
   driverTypes,
@@ -89,7 +102,10 @@ export function PrinterForm({
   submitLabel,
   onSubmit,
 }: {
-  /** The types to choose from (adding), or the printer's own (editing). */
+  /**
+   * The types to choose from (adding, which shows their setup help), or the
+   * printer's own (editing).
+   */
   driverTypes: readonly DriverType[];
   canChooseType: boolean;
   /** Starting values; the stored settings when editing. */
@@ -97,6 +113,8 @@ export function PrinterForm({
     name: string;
     driverType: string;
     settings?: Readonly<Record<string, unknown>>;
+    /** The secrets that are stored, when editing. */
+    secretsSet?: readonly string[];
   };
   /** Why the settings can't change now, if they can't (a job is active). */
   settingsLocked?: string | undefined;
@@ -108,7 +126,15 @@ export function PrinterForm({
   const selected = driverTypes.find((each) => each.type === driverType);
   const current = useMemo(() => typeFields(selected), [selected]);
   const fields = current.ok ? current.fields : NO_FIELDS;
-  const schema = useMemo(() => formSchema(fields), [fields]);
+  // Only the printer's own type has stored secrets.
+  const secretsSet =
+    driverType === initial.driverType
+      ? (initial.secretsSet ?? NO_SECRETS)
+      : NO_SECRETS;
+  const schema = useMemo(
+    () => formSchema(fields, secretsSet),
+    [fields, secretsSet],
+  );
   const [failure, setFailure] = useState<string>();
   const [defaultValues] = useState(() => ({
     name: initial.name,
@@ -184,6 +210,9 @@ export function PrinterForm({
             <FieldDescription>{selected.description}</FieldDescription>
           )}
         </Field>
+        {canChooseType && selected !== undefined && (
+          <SetupHelp steps={selected.setupHelp} />
+        )}
         <FieldSeparator />
         {settingsLocked !== undefined && (
           <Alert>
@@ -226,7 +255,19 @@ export function PrinterForm({
                 case "number":
                   return <field.TextField {...common} inputMode="decimal" />;
                 case "string":
-                  return <field.TextField {...common} />;
+                  return setting.writeOnly ? (
+                    <field.TextField
+                      {...common}
+                      type="password"
+                      // Not a login: browsers shouldn't fill in a saved one.
+                      autoComplete="new-password"
+                      {...(isStoredSecret(setting, secretsSet) && {
+                        placeholder: SECRET_KEPT,
+                      })}
+                    />
+                  ) : (
+                    <field.TextField {...common} />
+                  );
               }
             }}
           </form.AppField>
@@ -239,6 +280,26 @@ export function PrinterForm({
         </form.AppForm>
       </FieldGroup>
     </form>
+  );
+}
+
+/** What to do on the printer before adding it, as numbered steps. */
+function SetupHelp({ steps }: { steps: readonly string[] }) {
+  if (steps.length === 0) return null;
+  return (
+    <section
+      aria-labelledby="setup-help"
+      className="flex flex-col gap-1 rounded-lg border bg-muted/50 px-3 py-2 text-sm"
+    >
+      <h2 id="setup-help" className="font-medium">
+        Before you add it
+      </h2>
+      <ol className="list-decimal pl-5 text-muted-foreground">
+        {steps.map((step, index) => (
+          <li key={index}>{step}</li>
+        ))}
+      </ol>
+    </section>
   );
 }
 

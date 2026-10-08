@@ -92,8 +92,22 @@ export const SIMULATED_SETTINGS_SCHEMA = {
       description: "Whether the printer has a camera that takes snapshots.",
       type: "boolean",
     },
+    accessCode: {
+      title: "Access code",
+      description:
+        "Optional, and never checked: it shows how a real printer's access code is kept secret.",
+      writeOnly: true,
+      type: "string",
+      maxLength: 64,
+    },
   },
 } as const;
+
+/** The simulated printer's setup help. */
+export const SIMULATED_SETUP_HELP = [
+  "There's nothing to switch on: the simulated printer runs inside this server.",
+  "The access code is optional. Once saved, it's never shown again; leave it blank when editing to keep it.",
+];
 
 /** The simulated printer's defaults, as the server lists them. */
 export const SIMULATED_DEFAULTS = {
@@ -114,6 +128,7 @@ export const SIMULATED_DRIVER_TYPE: components["schemas"]["DriverType"] = {
   name: "Simulated printer",
   description:
     "A virtual printer for trying Open Print Stack without hardware, with faults you can inject.",
+  setupHelp: SIMULATED_SETUP_HELP,
   settingsSchema: SIMULATED_SETTINGS_SCHEMA,
   defaults: SIMULATED_DEFAULTS,
 };

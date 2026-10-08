@@ -17,6 +17,10 @@ const simulatedDriver = defineDriver({
     name: "Simulated printer",
     description:
       "A virtual printer for trying Open Print Stack without hardware, with faults you can inject.",
+    setupHelp: [
+      "There's nothing to switch on: the simulated printer runs inside this server.",
+      "The access code is optional. Once saved, it's never shown again; leave it blank when editing to keep it.",
+    ],
   },
   settingsSchema: simulatedSettingsSchema,
   initialCapabilities: simulatedCapabilities,

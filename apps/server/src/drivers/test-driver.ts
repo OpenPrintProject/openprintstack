@@ -38,6 +38,8 @@ export const testSettingsSchema = z.object({
   nozzleMaxC: z.number().min(1).default(250),
   /** Makes `create` throw. */
   failCreate: z.boolean().default(false),
+  /** A secret, as a real printer's access code is. */
+  accessCode: z.string().optional().meta({ writeOnly: true }),
 });
 
 export type TestSettings = z.output<typeof testSettingsSchema>;
