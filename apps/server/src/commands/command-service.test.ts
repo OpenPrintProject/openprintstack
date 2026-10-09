@@ -439,6 +439,12 @@ describe("CommandService: capabilities", () => {
       'The printer has no heater "chamber".',
     ],
     [
+      "a heater that only reports its temperature",
+      {},
+      { kind: "temperature.set", heaterId: "enclosure", targetC: 0 },
+      "The Enclosure only reports its temperature.",
+    ],
+    [
       "an unknown fan",
       {},
       { kind: "fan.set", fanId: "aux", percent: 10 },

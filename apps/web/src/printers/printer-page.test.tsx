@@ -8,7 +8,10 @@ import {
   isOnline,
   PrinterStatus,
 } from "@openprintstack/protocol";
-import { capabilitiesFixture } from "@openprintstack/protocol/fixtures";
+import {
+  capabilitiesFixture,
+  filamentFixture,
+} from "@openprintstack/protocol/fixtures";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -551,6 +554,139 @@ describe("temperatures", () => {
       expect(commands(server)).toEqual([
         { kind: "temperature.set", heaterId: "nozzle", targetC: 300 },
       ]);
+    });
+  });
+});
+
+describe("temperatures of sensors", () => {
+  const SENSOR = {
+    id: "chamber",
+    kind: "chamber",
+    label: "Chamber",
+    controllable: false,
+    maxC: null,
+  } as const;
+
+  it("shows a heater that only reports its temperature, without controls", async () => {
+    await open({
+      telemetry: {
+        temperatures: {
+          ...IDLE_TELEMETRY.temperatures,
+          chamber: { actualC: 31.2, targetC: null },
+        },
+      },
+      capabilities: {
+        ...capabilitiesFixture,
+        heaters: [...capabilitiesFixture.heaters, SENSOR],
+      },
+    });
+
+    const temperatures = within(card("Temperatures"));
+    expect(temperatures.getByText("Chamber").nextSibling?.textContent).toBe(
+      "31.2 °C",
+    );
+    expect(temperatures.queryByLabelText("Chamber target (°C)")).toBeNull();
+    expect(temperatures.queryByRole("button", { name: /Chamber/ })).toBeNull();
+    expect(
+      temperatures.getByRole("button", { name: "Set the Nozzle" }),
+    ).toBeDefined();
+  });
+
+  it("gives no reason for controls a printer of sensors doesn't have", async () => {
+    await open({
+      status: "offline",
+      capabilities: { ...capabilitiesFixture, heaters: [SENSOR] },
+    });
+
+    const temperatures = within(card("Temperatures"));
+    expect(temperatures.getByText("Chamber")).toBeDefined();
+    expect(temperatures.queryByText("The printer is offline.")).toBeNull();
+  });
+});
+
+describe("filament", () => {
+  /** Each slot of the unit, as its row reads. */
+  function rows(unit: string): (string | null)[] {
+    return within(within(card("Filament")).getByRole("region", { name: unit }))
+      .getAllByRole("listitem")
+      .map((row) => row.textContent);
+  }
+
+  it("shows each unit's slots: colour, contents, nozzle range and status", async () => {
+    await open({ filament: filamentFixture });
+
+    expect(rows("CANVAS 1")).toEqual([
+      "Tray 1PLA · Matte Black190–230 °CActive",
+      "Tray 2PETGfrom 220 °CLoaded",
+      "Tray 3EmptyEmpty",
+    ]);
+    const [first, , empty] = within(card("Filament")).getAllByRole("listitem");
+    expect(first?.querySelector("[title='#1a1a1a']")).not.toBeNull();
+    expect(empty?.querySelector("[title]")).toBeNull();
+  });
+
+  it("sits after Temperatures", async () => {
+    await open({ filament: filamentFixture });
+
+    expect(
+      screen
+        .getAllByRole("heading", { level: 2 })
+        .map((each) => each.textContent),
+    ).toEqual([
+      "Print",
+      "Temperatures",
+      "Filament",
+      "Files",
+      "Motion",
+      "Fans",
+      "Camera",
+      "Simulator",
+    ]);
+  });
+
+  it("is hidden when the printer doesn't report filament", async () => {
+    await open();
+
+    expect(
+      screen.queryByRole("heading", { name: "Filament", level: 2 }),
+    ).toBeNull();
+  });
+
+  it("says when no units are attached", async () => {
+    await open({ filament: { units: [] } });
+
+    expect(
+      within(card("Filament")).getByText("No filament units attached."),
+    ).toBeDefined();
+  });
+
+  it("keeps the last readout while the printer is offline, and says so", async () => {
+    await open({ status: "offline", filament: filamentFixture });
+
+    const filament = within(card("Filament"));
+    expect(
+      filament.getByText("Last reported before the printer disconnected."),
+    ).toBeDefined();
+    expect(rows("CANVAS 1")).toHaveLength(3);
+  });
+
+  it("follows the printer live", async () => {
+    const { server } = await open({ filament: filamentFixture });
+    const changed = structuredClone(filamentFixture);
+    changed.units[0]!.slots[0]!.status = "loaded";
+
+    server.publish("printer.filament_changed", "p1", { filament: changed });
+
+    await waitFor(() => {
+      expect(rows("CANVAS 1")[0]).toBe(
+        "Tray 1PLA · Matte Black190–230 °CLoaded",
+      );
+    });
+    server.publish("printer.filament_changed", "p1", { filament: null });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("heading", { name: "Filament", level: 2 }),
+      ).toBeNull();
     });
   });
 });

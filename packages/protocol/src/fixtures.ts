@@ -8,6 +8,7 @@ import type { Camera } from "./cameras.ts";
 import type { Capabilities } from "./capabilities.ts";
 import type { CommandKind, PrinterCommandOf } from "./commands.ts";
 import type { EventType, OpsEventOf } from "./events.ts";
+import type { Filament } from "./filament.ts";
 import type { PrinterFile } from "./files.ts";
 import type { PrinterSnapshot } from "./state.ts";
 import type { Telemetry } from "./telemetry.ts";
@@ -38,8 +39,14 @@ export const capabilitiesFixture: Capabilities = {
     "extension.invoke",
   ],
   heaters: [
-    { id: "nozzle", kind: "nozzle", label: "Nozzle", maxC: 300 },
-    { id: "bed", kind: "bed", label: "Bed", maxC: 120 },
+    {
+      id: "nozzle",
+      kind: "nozzle",
+      label: "Nozzle",
+      controllable: true,
+      maxC: 300,
+    },
+    { id: "bed", kind: "bed", label: "Bed", controllable: true, maxC: 120 },
   ],
   fans: [
     { id: "part", kind: "part", label: "Part cooling", controllable: true },
@@ -77,6 +84,49 @@ export const telemetryFixture: Telemetry = {
     currentLayer: 12,
     totalLayers: null,
   },
+};
+
+/** One changer with an active, a loaded and an empty slot. */
+export const filamentFixture: Filament = {
+  units: [
+    {
+      id: "canvas-1",
+      kind: "changer",
+      label: "CANVAS 1",
+      slots: [
+        {
+          id: "1",
+          label: "Tray 1",
+          status: "active",
+          material: "PLA",
+          name: "Matte Black",
+          colorHex: "#1a1a1a",
+          nozzleMinC: 190,
+          nozzleMaxC: 230,
+        },
+        {
+          id: "2",
+          label: "Tray 2",
+          status: "loaded",
+          material: "PETG",
+          name: null,
+          colorHex: "#c62828",
+          nozzleMinC: 220,
+          nozzleMaxC: null,
+        },
+        {
+          id: "3",
+          label: "Tray 3",
+          status: "empty",
+          material: null,
+          name: null,
+          colorHex: null,
+          nozzleMinC: null,
+          nozzleMaxC: null,
+        },
+      ],
+    },
+  ],
 };
 
 export const commandFixtures: { [K in CommandKind]: PrinterCommandOf<K> } = {
@@ -186,6 +236,15 @@ export const eventFixtures: { [T in EventType]: OpsEventOf<T> } = {
     source: driver,
     correlationId: null,
     payload: {},
+  },
+  "printer.filament_changed": {
+    ...base(19),
+    printerId: PRINTER_ID,
+    type: "printer.filament_changed",
+    category: "state",
+    source: driver,
+    correlationId: null,
+    payload: { filament: filamentFixture },
   },
   "command.requested": {
     ...base(8),
@@ -307,6 +366,7 @@ export const snapshotFixture: PrinterSnapshot = {
     error: null,
     telemetry: telemetryFixture,
     capabilities: capabilitiesFixture,
+    filament: filamentFixture,
     updatedAt: TS,
   },
   seq: 42,

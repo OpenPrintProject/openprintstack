@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 import {
   commandGate,
   fanGate,
+  heaterGate,
   HIDDEN,
   jogGate,
   simulatorGate,
@@ -189,6 +190,35 @@ describe("fanGate", () => {
     } as const;
 
     expect(fanGate(state("printing"), fan)).toEqual(HIDDEN);
+  });
+});
+
+describe("heaterGate", () => {
+  it("follows temperature.set for a settable heater", () => {
+    const heater = {
+      id: "nozzle",
+      kind: "nozzle",
+      label: "Nozzle",
+      controllable: true,
+      maxC: 300,
+    } as const;
+
+    expect(heaterGate(state("printing"), heater)).toEqual(enabled);
+    expect(heaterGate(state("offline"), heater)).toEqual(
+      disabled("The printer is offline."),
+    );
+  });
+
+  it("hides the controls of a heater that only reports its temperature", () => {
+    const sensor = {
+      id: "chamber",
+      kind: "chamber",
+      label: "Chamber",
+      controllable: false,
+      maxC: null,
+    } as const;
+
+    expect(heaterGate(state("idle"), sensor)).toEqual(HIDDEN);
   });
 });
 

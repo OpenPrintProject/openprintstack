@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Open Print Stack contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import { filamentFixture } from "@openprintstack/protocol/fixtures";
 import { describe, expect, it } from "vitest";
 
 import { DriverMessage, JobLifecycleEvent } from "./index.ts";
@@ -50,6 +51,9 @@ const messages: DriverMessage[] = [
       extensions: [],
     },
   },
+  { type: "filament", filament: filamentFixture },
+  { type: "filament", filament: { units: [] } },
+  { type: "filament", filament: null },
   { type: "files_changed" },
   {
     type: "alert",
@@ -89,6 +93,7 @@ describe("DriverMessage", () => {
       [
         "alert",
         "capabilities",
+        "filament",
         "files_changed",
         "job",
         "job_lifecycle",
@@ -115,6 +120,16 @@ describe("DriverMessage", () => {
     ],
     ["an unknown log level", { type: "log", level: "fatal", message: "x" }],
     ["an empty alert code", { type: "alert", severity: "info", code: "" }],
+    ["filament left out", { type: "filament" }],
+    [
+      "filament with the same unit twice",
+      {
+        type: "filament",
+        filament: {
+          units: [...filamentFixture.units, ...filamentFixture.units],
+        },
+      },
+    ],
     ["an unknown type", { type: "progress" }],
   ])("rejects %s", (_name, message) => {
     expect(DriverMessage.safeParse(message).success).toBe(false);

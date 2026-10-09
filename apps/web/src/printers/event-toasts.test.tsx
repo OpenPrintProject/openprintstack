@@ -107,6 +107,7 @@ describe("eventToast", () => {
     ["telemetry", eventFixtures["printer.telemetry"]],
     ["a started job", eventFixtures["printer.job_started"]],
     ["changed files", eventFixtures["printer.files_changed"]],
+    ["changed filament", eventFixtures["printer.filament_changed"]],
     ["a command's result", eventFixtures["command.result"]],
   ] as const)("doesn't toast %s", (_, event) => {
     expect(eventToast(event, "Sim 1")).toBeNull();

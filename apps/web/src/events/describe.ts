@@ -11,6 +11,7 @@ import type {
   PrinterCommand,
 } from "@openprintstack/protocol";
 
+import { filamentSummary } from "../printers/filament.ts";
 import { formatBytes, formatPercent } from "../printers/format.ts";
 import { temperatureText } from "../printers/parts.tsx";
 import { STATUS_LABEL } from "../printers/status.ts";
@@ -18,6 +19,7 @@ import { STATUS_LABEL } from "../printers/status.ts";
 // How the event log puts events into words. A row reads, for example:
 //
 //   Status changed   Idle → Preparing · Heating up
+//   Filament changed    CANVAS 1: 3 of 4 loaded, Tray 2 active (PLA · Black)
 //   Command requested   Pause the print                    (by rob)
 //   Command result      Pause the print: done in 12 ms
 //
@@ -34,6 +36,7 @@ export const TYPE_LABEL: Record<EventType, string> = {
   "printer.job_started": "Job started",
   "printer.job_ended": "Job ended",
   "printer.files_changed": "Files changed",
+  "printer.filament_changed": "Filament changed",
   "command.requested": "Command requested",
   "command.result": "Command result",
   "printer.added": "Printer added",
@@ -104,6 +107,8 @@ export function eventSummary(
       if (outcome === "cancelled") return `${fileName} was cancelled`;
       return `${fileName} failed`;
     }
+    case "printer.filament_changed":
+      return filamentSummary(event.payload.filament);
     case "command.requested":
       return commandText(event.payload.command, event.printerId, context);
     case "command.result":

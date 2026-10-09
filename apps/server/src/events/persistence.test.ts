@@ -8,6 +8,7 @@ import {
 } from "@openprintstack/protocol";
 import {
   BOOT_ID,
+  filamentFixture,
   PRINTER_ID,
   telemetryFixture,
 } from "@openprintstack/protocol/fixtures";
@@ -64,6 +65,17 @@ function alert(code: string): EventDraft {
     printerId: PRINTER_ID,
     source: driver,
     payload: { severity: "info", code, message: "" },
+  };
+}
+
+function filament(status: "loaded" | "active"): EventDraft {
+  const readout = structuredClone(filamentFixture);
+  readout.units[0]!.slots[0]!.status = status;
+  return {
+    type: "printer.filament_changed",
+    printerId: PRINTER_ID,
+    source: driver,
+    payload: { filament: readout },
   };
 }
 
@@ -165,6 +177,28 @@ describe("EventPersistence: non-telemetry events", () => {
     await tick();
 
     for (const event of published) {
+      expect(repos.events.findById(event.id)).toEqual(event);
+    }
+  });
+});
+
+describe("EventPersistence: filament changes", () => {
+  it("writes every one at once, even inside a telemetry window", async () => {
+    const { bus, repos, stored } = await setup();
+    bus.publish(telemetry(100));
+    await tick();
+
+    const changes = [
+      bus.publish(filament("active")),
+      bus.publish(telemetry(110)),
+      bus.publish(filament("loaded")),
+      bus.publish(filament("active")),
+    ].filter((event) => event.type === "printer.filament_changed");
+    await tick();
+
+    // The held telemetry (seq 3) waits for its window; no change does.
+    expect(stored()).toEqual([1, 2, 4, 5]);
+    for (const event of changes) {
       expect(repos.events.findById(event.id)).toEqual(event);
     }
   });

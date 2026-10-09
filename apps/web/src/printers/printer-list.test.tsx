@@ -33,7 +33,13 @@ describe("the printer list", () => {
           ...capabilitiesFixture,
           heaters: [
             ...capabilitiesFixture.heaters,
-            { id: "chamber", kind: "chamber", label: "Chamber", maxC: 60 },
+            {
+              id: "chamber",
+              kind: "chamber",
+              label: "Chamber",
+              controllable: false,
+              maxC: null,
+            },
           ],
         },
         telemetry: {

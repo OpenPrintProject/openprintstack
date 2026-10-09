@@ -111,6 +111,23 @@ describe("checkSafety: temperatures", () => {
       'The printer has no heater "chamber", so its limit is unknown.',
     ],
     [
+      "a heater that only reports its temperature",
+      temperature("chamber", 0),
+      state(HOMED, {
+        heaters: [
+          ...CAPABILITIES.heaters,
+          {
+            id: "chamber",
+            kind: "chamber",
+            label: "Chamber",
+            controllable: false,
+            maxC: null,
+          },
+        ],
+      }),
+      "The Chamber only reports its temperature, so it has no limit.",
+    ],
+    [
       "no capabilities",
       temperature("nozzle", 40),
       state(HOMED, null),

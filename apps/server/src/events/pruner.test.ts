@@ -103,6 +103,26 @@ describe("Pruner", () => {
     ]);
   });
 
+  it("keeps every filament change, however old", async () => {
+    const { db, repos, pruner } = await setup();
+    const filament = (ms: number) =>
+      at(eventFixtures["printer.filament_changed"], ms);
+    repos.events.insertMany([
+      filament(CUTOFF - 365 * DAY),
+      filament(CUTOFF - 1),
+      telemetry(CUTOFF - 1),
+      filament(NOW),
+    ]);
+
+    await pruner.start();
+
+    expect(stored(db)).toEqual([
+      [CUTOFF - 365 * DAY, "printer.filament_changed"],
+      [CUTOFF - 1, "printer.filament_changed"],
+      [NOW, "printer.filament_changed"],
+    ]);
+  });
+
   it("uses the configured retention", async () => {
     const { db, repos, pruner } = await setup({ retentionDays: 1 });
     repos.events.insertMany([telemetry(NOW - DAY - 1), telemetry(NOW - DAY)]);

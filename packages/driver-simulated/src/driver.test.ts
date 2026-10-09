@@ -55,14 +55,16 @@ describe("connecting", () => {
       "status",
       "job",
       "telemetry",
+      "filament",
       "log",
     ]);
+    expect(sim.all("filament")).toEqual([{ type: "filament", filament: null }]);
     expect(sim.statuses()).toEqual(["idle"]);
     expect(sim.telemetry()).toEqual({
       temperatures: {
         nozzle: { actualC: 25, targetC: 0 },
         bed: { actualC: 25, targetC: 0 },
-        chamber: { actualC: 25, targetC: 0 },
+        chamber: { actualC: 25, targetC: null },
       },
       fans: { part: { percent: 0 }, hotend: { percent: 0 } },
       speedPercent: 100,
@@ -110,6 +112,7 @@ describe("connecting", () => {
       "status",
       "job",
       "telemetry",
+      "filament",
     ]);
     expect(sim.telemetry()).toMatchObject({
       speedPercent: 100,
@@ -145,7 +148,7 @@ describe("a print", () => {
           temperatures: {
             nozzle: { actualC: 25, targetC: 210 },
             bed: { actualC: 25, targetC: 60 },
-            chamber: { actualC: 25, targetC: 0 },
+            chamber: { actualC: 25, targetC: null },
           },
         },
       },
@@ -177,7 +180,7 @@ describe("a print", () => {
           temperatures: {
             nozzle: { actualC: 210, targetC: 0 },
             bed: { actualC: 60, targetC: 0 },
-            chamber: { actualC: 25, targetC: 0 },
+            chamber: { actualC: 36.7, targetC: null },
           },
         },
       },
@@ -256,6 +259,71 @@ describe("a print", () => {
     await expect(sim.client.move({ x: 1 })).rejects.toMatchObject({
       code: "invalid_state",
     });
+  });
+});
+
+describe("filament slots", () => {
+  const WITH_SLOTS: SettingsInput = { ...FAST, filamentSlots: true };
+
+  /** Each filament message's slot statuses, in order. */
+  function statuses(from = 0): (string[] | undefined)[] {
+    return sim
+      .since(from)
+      .flatMap((message) =>
+        message.type === "filament"
+          ? [message.filament?.units[0]?.slots.map((slot) => slot.status)]
+          : [],
+      );
+  }
+
+  it("reports the changer when it connects", async () => {
+    await connected(WITH_SLOTS);
+
+    expect(statuses()).toEqual([["loaded", "loaded", "loaded", "empty"]]);
+    expect(sim.all("filament")[0]?.filament?.units[0]).toMatchObject({
+      id: "changer",
+      kind: "changer",
+      label: "Simulated changer",
+    });
+  });
+
+  it("reports slot 1 active for a print, before the status, and loaded again before idle", async () => {
+    await connected(WITH_SLOTS);
+    await sim.upload("cube.gcode");
+    const from = sim.messages.length;
+    await sim.client.startPrint({ fileName: "cube.gcode" });
+
+    expect(sim.since(from).map((message) => message.type)).toEqual([
+      "job_lifecycle",
+      "job",
+      "telemetry",
+      "filament",
+      "status",
+    ]);
+    const end = sim.messages.length;
+    await sim.tick(24);
+
+    expect(sim.status()).toBe("idle");
+    expect(
+      sim
+        .since(end)
+        .slice(-2)
+        .map((message) => message.type),
+    ).toEqual(["filament", "status"]);
+    expect(statuses()).toEqual([
+      ["loaded", "loaded", "loaded", "empty"],
+      ["active", "loaded", "loaded", "empty"],
+      ["loaded", "loaded", "loaded", "empty"],
+    ]);
+  });
+
+  it("reports the changer again on reconnect, for the host to compare", async () => {
+    await connected(WITH_SLOTS);
+    await sim.client.disconnect();
+    const from = sim.messages.length;
+    await sim.client.connect();
+
+    expect(statuses(from)).toEqual([["loaded", "loaded", "loaded", "empty"]]);
   });
 });
 
@@ -475,12 +543,13 @@ describe("a simulated disconnect", () => {
       "status",
       "job",
       "telemetry",
+      "filament",
     ]);
     expect(sim.telemetry()).toEqual({
       temperatures: {
         nozzle: { actualC: 25, targetC: 0 },
         bed: { actualC: 25, targetC: 0 },
-        chamber: { actualC: 25, targetC: 0 },
+        chamber: { actualC: 25, targetC: null },
       },
       fans: { part: { percent: 0 }, hotend: { percent: 0 } },
       speedPercent: 100,
@@ -509,6 +578,7 @@ describe("a simulated disconnect", () => {
       { type: "job_lifecycle", event: "completed", fileName: "cube.gcode" },
       { type: "job", job: null },
       expect.objectContaining({ type: "telemetry" }),
+      { type: "filament", filament: null },
     ]);
   });
 
@@ -546,6 +616,7 @@ describe("a simulated disconnect", () => {
       "job_lifecycle",
       "job",
       "telemetry",
+      "filament",
     ]);
     expect(sim.status()).toBe("idle");
     expect(sim.all("job_lifecycle").at(-1)?.event).toBe("failed");

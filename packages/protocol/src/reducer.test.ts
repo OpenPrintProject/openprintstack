@@ -6,12 +6,14 @@ import { describe, expect, it } from "vitest";
 import {
   capabilitiesFixture,
   eventFixtures,
+  filamentFixture,
   telemetryFixture,
   TS,
 } from "./fixtures.ts";
 import {
   emptyTelemetry,
   type EventType,
+  type Filament,
   initialPrinterState,
   type OpsEventOf,
   type PrinterState,
@@ -49,6 +51,16 @@ function telemetry(value: Telemetry): OpsEventOf<"printer.telemetry"> {
   };
 }
 
+function filamentChanged(
+  filament: Filament | null,
+): OpsEventOf<"printer.filament_changed"> {
+  return {
+    ...eventFixtures["printer.filament_changed"],
+    ts: LATER,
+    payload: { filament },
+  };
+}
+
 function onlineState(): PrinterState {
   return {
     status: "printing",
@@ -56,6 +68,7 @@ function onlineState(): PrinterState {
     error: null,
     telemetry: telemetryFixture,
     capabilities: capabilitiesFixture,
+    filament: filamentFixture,
     updatedAt: TS,
   };
 }
@@ -68,6 +81,7 @@ describe("initialPrinterState", () => {
       error: null,
       telemetry: emptyTelemetry(),
       capabilities: null,
+      filament: null,
       updatedAt: TS,
     });
   });
@@ -98,13 +112,14 @@ describe("reducePrinterState", () => {
   });
 
   it.each(["offline", "connecting"] as const)(
-    "clears telemetry but keeps capabilities when the printer goes %s",
+    "clears telemetry but keeps capabilities and filament when the printer goes %s",
     (status) => {
       const state = reducePrinterState(onlineState(), statusChanged(status));
 
       expect(state.status).toBe(status);
       expect(state.telemetry).toStrictEqual(emptyTelemetry());
       expect(state.capabilities).toStrictEqual(capabilitiesFixture);
+      expect(state.filament).toStrictEqual(filamentFixture);
     },
   );
 
@@ -145,10 +160,30 @@ describe("reducePrinterState", () => {
     expect(state.updatedAt).toBe(LATER);
   });
 
+  it("replaces the filament readout", () => {
+    const filament: Filament = { units: [] };
+
+    const state = reducePrinterState(onlineState(), filamentChanged(filament));
+
+    expect(state).toStrictEqual({
+      ...onlineState(),
+      filament,
+      updatedAt: LATER,
+    });
+  });
+
+  it("clears the filament readout when the printer stops reporting it", () => {
+    const state = reducePrinterState(onlineState(), filamentChanged(null));
+
+    expect(state.filament).toBeNull();
+    expect(state.updatedAt).toBe(LATER);
+  });
+
   const stateEvents: readonly EventType[] = [
     "printer.status_changed",
     "printer.telemetry",
     "printer.capabilities_changed",
+    "printer.filament_changed",
   ];
   const otherEvents = Object.values(eventFixtures).filter(
     (event) => !stateEvents.includes(event.type),
@@ -183,6 +218,7 @@ describe("reducePrinterState", () => {
       },
       statusChanged("idle"),
       telemetry(telemetryFixture),
+      filamentChanged(filamentFixture),
       statusChanged("printing", "Layer 12"),
     ];
 
@@ -194,6 +230,7 @@ describe("reducePrinterState", () => {
       error: null,
       telemetry: telemetryFixture,
       capabilities: capabilitiesFixture,
+      filament: filamentFixture,
       updatedAt: LATER,
     });
   });

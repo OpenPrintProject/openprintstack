@@ -26,7 +26,10 @@ export interface ConformanceFixture<S extends SettingsSchema = SettingsSchema> {
   settings: z.input<S>;
   /** How long each driver call may take. Default: 5000 ms. */
   timeoutMs?: number;
-  /** How long to watch for messages after `dispose`. Default: 1000 ms. */
+  /**
+   * How long to wait for the first readings after connecting, and to watch
+   * for messages after `dispose`. Default: 1000 ms.
+   */
   quietPeriodMs?: number;
 }
 
@@ -196,6 +199,60 @@ export const CONFORMANCE_CHECKS: readonly ConformanceCheck[] = [
       }),
   },
   {
+    name: "reports no target for a heater that only reports its temperature",
+    run: (context) =>
+      withHarness(context, async (harness) => {
+        await harness.client.connect();
+        const sensors = currentCapabilities(context, harness)
+          .heaters.filter((heater) => !heater.controllable)
+          .map((heater) => heater.id);
+        if (sensors.length === 0) {
+          context.skip("The printer has no read-only heaters.");
+        }
+        // Some printers send their first readings just after connecting.
+        await sleep(context.fixture.quietPeriodMs);
+
+        const targeted = harness.messages.flatMap((message) =>
+          message.type === "telemetry"
+            ? Object.entries(message.telemetry.temperatures ?? {})
+                .filter(
+                  ([id, reading]) =>
+                    sensors.includes(id) && reading.targetC !== null,
+                )
+                .map(([id]) => id)
+            : [],
+        );
+        expect(
+          [...new Set(targeted)],
+          "A read-only heater has no target: report its targetC as null",
+        ).toEqual([]);
+      }),
+  },
+  {
+    name: "reports filament slots the server accepts, if it has any",
+    run: (context) =>
+      withHarness(context, async (harness) => {
+        await harness.client.connect();
+        // Some printers report their slots only when asked, after connecting.
+        await sleep(context.fixture.quietPeriodMs);
+
+        const refused = harness.protocolErrors
+          .filter((error) => sentType(error.received) === "filament")
+          .map((error) => error.message);
+        if (refused.length > 0) {
+          throw new Error(
+            `The server would refuse the driver's filament readouts:\n${refused.join("\n")}`,
+          );
+        }
+        const reported = harness.messages.some(
+          (message) => message.type === "filament" && message.filament !== null,
+        );
+        if (!reported) {
+          context.skip("The printer doesn't report filament slots.");
+        }
+      }),
+  },
+  {
     name: "answers an unknown op with not_supported",
     run: (context) =>
       withHarness(context, async (harness) => {
@@ -265,6 +322,14 @@ async function withHarness(
   } finally {
     await harness.close();
   }
+}
+
+/** The type of the message in a raw envelope the client refused, if any. */
+function sentType(received: unknown): unknown {
+  if (typeof received !== "object" || received === null) return undefined;
+  const message: unknown = (received as { message?: unknown }).message;
+  if (typeof message !== "object" || message === null) return undefined;
+  return (message as { type?: unknown }).type;
 }
 
 /** The last capabilities the driver reported, or its initial ones. */

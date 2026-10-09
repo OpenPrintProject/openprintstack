@@ -4,6 +4,7 @@
 import type {
   Capabilities,
   ErrorInfo,
+  Filament,
   PrinterSnapshot,
   PrinterStatus,
   Telemetry,
@@ -16,7 +17,7 @@ import { FakeServer } from "./fake-server.ts";
 // Printers for the app's tests: a simulated-looking printer, idle and homed,
 // with every capability (protocol's fixture: a nozzle up to 300 °C and a bed
 // up to 120 °C, a part-cooling fan, .gcode files, a camera and the simulator
-// extension).
+// extension), and no filament readout.
 
 export const PRINTER_ID = "p1";
 
@@ -40,6 +41,7 @@ export type SnapshotChanges = {
   error?: ErrorInfo | null;
   telemetry?: Partial<Telemetry>;
   capabilities?: Capabilities | null;
+  filament?: Filament | null;
   seq?: number;
 };
 
@@ -59,6 +61,7 @@ export function snapshotOf(changes: SnapshotChanges = {}): PrinterSnapshot {
         changes.capabilities === undefined
           ? capabilitiesFixture
           : changes.capabilities,
+      filament: changes.filament ?? null,
       updatedAt: TS,
     },
     seq: changes.seq ?? 42,

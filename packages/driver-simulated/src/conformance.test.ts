@@ -21,3 +21,11 @@ describe("without a camera", () => {
     quietPeriodMs,
   });
 });
+
+describe("with filament slots", () => {
+  // The filament check runs, rather than being skipped.
+  describeDriverConformance(simulatedDriver, {
+    settings: { filamentSlots: true },
+    quietPeriodMs,
+  });
+});

@@ -5,6 +5,7 @@ import {
   AlertSeverity,
   Capabilities,
   ErrorInfo,
+  Filament,
   JobOutcome,
   JobProgress,
   PrinterStatus,
@@ -70,6 +71,17 @@ export const DriverCapabilitiesMessage = z.object({
   capabilities: Capabilities,
 });
 
+/**
+ * The whole filament readout, never a patch, or null when the printer doesn't
+ * report filament. Becomes `printer.filament_changed`, only when it changes.
+ * The host keeps the last one while the printer is offline and across
+ * restarts, so a driver that has stopped reporting filament sends null.
+ */
+export const DriverFilamentMessage = z.object({
+  type: z.literal("filament"),
+  filament: Filament.nullable(),
+});
+
 /** Becomes `printer.files_changed`. */
 export const DriverFilesChangedMessage = z.object({
   type: z.literal("files_changed"),
@@ -107,6 +119,7 @@ export const DriverMessage = z.discriminatedUnion("type", [
   DriverJobMessage,
   DriverJobLifecycleMessage,
   DriverCapabilitiesMessage,
+  DriverFilamentMessage,
   DriverFilesChangedMessage,
   DriverAlertMessage,
   DriverLogMessage,

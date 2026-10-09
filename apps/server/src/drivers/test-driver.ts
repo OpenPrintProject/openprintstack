@@ -44,7 +44,10 @@ export const testSettingsSchema = z.object({
 
 export type TestSettings = z.output<typeof testSettingsSchema>;
 
-/** Everything a command can use: a nozzle, a bed, two fans, 200 mm axes. */
+/**
+ * Everything a command can use: a nozzle, a bed, a sensor that only reports
+ * its temperature, two fans, 200 mm axes.
+ */
 export function testCapabilities(settings: TestSettings): Capabilities {
   return {
     commands: [...CommandKind.options],
@@ -53,9 +56,17 @@ export function testCapabilities(settings: TestSettings): Capabilities {
         id: "nozzle",
         kind: "nozzle",
         label: "Nozzle",
+        controllable: true,
         maxC: settings.nozzleMaxC,
       },
-      { id: "bed", kind: "bed", label: "Bed", maxC: 100 },
+      { id: "bed", kind: "bed", label: "Bed", controllable: true, maxC: 100 },
+      {
+        id: "enclosure",
+        kind: "chamber",
+        label: "Enclosure",
+        controllable: false,
+        maxC: null,
+      },
     ],
     fans: [
       { id: "part", kind: "part", label: "Part cooling", controllable: true },

@@ -92,6 +92,13 @@ export const SIMULATED_SETTINGS_SCHEMA = {
       description: "Whether the printer has a camera that takes snapshots.",
       type: "boolean",
     },
+    filamentSlots: {
+      default: false,
+      title: "Filament slots",
+      description:
+        "Whether the printer reports a filament changer with 4 slots, as a CANVAS or an AMS does.",
+      type: "boolean",
+    },
     accessCode: {
       title: "Access code",
       description:
@@ -121,6 +128,7 @@ export const SIMULATED_DEFAULTS = {
   buildVolumeZMm: 256,
   maxMoveSpeedMmS: 200,
   cameraEnabled: true,
+  filamentSlots: false,
 } as const;
 
 export const SIMULATED_DRIVER_TYPE: components["schemas"]["DriverType"] = {

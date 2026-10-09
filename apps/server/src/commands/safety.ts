@@ -47,6 +47,11 @@ function checkTemperature(
       `The printer has no heater "${heaterId}", so its limit is unknown.`,
     );
   }
+  if (!heater.controllable) {
+    return unsafe(
+      `The ${heater.label} only reports its temperature, so it has no limit.`,
+    );
+  }
   if (!(targetC >= 0)) {
     return unsafe("The target must be 0 °C or more.");
   }

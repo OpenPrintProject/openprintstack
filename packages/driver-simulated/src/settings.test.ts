@@ -37,6 +37,7 @@ describe("settings", () => {
       buildVolumeZMm: 256,
       maxMoveSpeedMmS: 200,
       cameraEnabled: true,
+      filamentSlots: false,
     });
   });
 
@@ -52,7 +53,7 @@ describe("settings", () => {
       )
       .map(([key]) => key);
 
-    expect(Object.keys(properties)).toHaveLength(11);
+    expect(Object.keys(properties)).toHaveLength(12);
     expect(unlabelled).toEqual([]);
   });
 
@@ -123,9 +124,21 @@ describe("capabilities", () => {
     expect(Capabilities.parse(capabilities)).toEqual({
       commands: CommandKind.options,
       heaters: [
-        { id: "nozzle", kind: "nozzle", label: "Nozzle", maxC: 280 },
-        { id: "bed", kind: "bed", label: "Bed", maxC: 100 },
-        { id: "chamber", kind: "chamber", label: "Chamber", maxC: 60 },
+        {
+          id: "nozzle",
+          kind: "nozzle",
+          label: "Nozzle",
+          controllable: true,
+          maxC: 280,
+        },
+        { id: "bed", kind: "bed", label: "Bed", controllable: true, maxC: 100 },
+        {
+          id: "chamber",
+          kind: "chamber",
+          label: "Chamber",
+          controllable: false,
+          maxC: null,
+        },
       ],
       fans: [
         { id: "part", kind: "part", label: "Part cooling", controllable: true },

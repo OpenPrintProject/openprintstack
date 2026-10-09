@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Capabilities } from "./capabilities.ts";
 import { PrinterCommand } from "./commands.ts";
 import { ErrorInfo, Id, IsoDateTime } from "./common.ts";
+import { Filament } from "./filament.ts";
 import { PrinterStatus } from "./status.ts";
 import { Telemetry } from "./telemetry.ts";
 
@@ -24,6 +25,7 @@ export const EventType = z
     "printer.job_started",
     "printer.job_ended",
     "printer.files_changed",
+    "printer.filament_changed",
     "command.requested",
     "command.result",
     "printer.added",
@@ -49,6 +51,7 @@ export const EVENT_CATEGORY = {
   "printer.job_started": "state",
   "printer.job_ended": "state",
   "printer.files_changed": "state",
+  "printer.filament_changed": "state",
   "command.requested": "command",
   "command.result": "command",
   "printer.added": "config",
@@ -178,6 +181,15 @@ export const PrinterFilesChangedEvent = printerEvent(
   z.object({}),
 ).meta({ id: "PrinterFilesChangedEvent" });
 
+/**
+ * The printer's filament readout changed. Carries the whole readout, never a
+ * patch: null when the printer stopped reporting filament.
+ */
+export const PrinterFilamentChangedEvent = printerEvent(
+  "printer.filament_changed",
+  z.object({ filament: Filament.nullable() }),
+).meta({ id: "PrinterFilamentChangedEvent" });
+
 // Command
 
 export const CommandRequestedEvent = printerEvent(
@@ -255,6 +267,7 @@ export const OpsEvent = z
     PrinterJobStartedEvent,
     PrinterJobEndedEvent,
     PrinterFilesChangedEvent,
+    PrinterFilamentChangedEvent,
     CommandRequestedEvent,
     CommandResultEvent,
     PrinterAddedEvent,

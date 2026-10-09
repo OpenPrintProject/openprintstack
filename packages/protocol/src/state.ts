@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { Capabilities } from "./capabilities.ts";
 import { ErrorInfo, Id, IsoDateTime } from "./common.ts";
+import { Filament } from "./filament.ts";
 import { PrinterStatus } from "./status.ts";
 import { Telemetry } from "./telemetry.ts";
 
@@ -17,6 +18,11 @@ export const PrinterState = z
     telemetry: Telemetry,
     /** Null until the driver has reported its capabilities. */
     capabilities: Capabilities.nullable(),
+    /**
+     * The last filament readout, kept while the printer is offline. Null when
+     * the printer doesn't report filament.
+     */
+    filament: Filament.nullable(),
     /** The `ts` of the last event that changed this state. */
     updatedAt: IsoDateTime,
   })

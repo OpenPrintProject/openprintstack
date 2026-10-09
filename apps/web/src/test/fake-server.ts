@@ -513,6 +513,7 @@ export class FakeServer {
             job: null,
           },
           capabilities: capabilitiesFixture,
+          filament: null,
           updatedAt: TS,
         },
         seq: this.#seq,

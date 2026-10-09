@@ -3,6 +3,7 @@
 
 // Each conformance check against a driver broken in the way it should catch.
 
+import type { FilamentUnit } from "@openprintstack/protocol";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -173,6 +174,21 @@ describe("the conformance checks", () => {
       "Not serialisable: capabilities.maxMoveSpeedMmS is a Date.",
     ],
     ["a missing field", { cameras: undefined }, /cameras/],
+    [
+      "a read-only heater with a limit",
+      {
+        heaters: [
+          {
+            id: "chamber",
+            kind: "chamber",
+            label: "Chamber",
+            controllable: false,
+            maxC: 60,
+          },
+        ],
+      },
+      /heaters/,
+    ],
   ])("fail initial capabilities with %s", async (_name, change, error) => {
     const module = {
       ...fakeDriver,
@@ -280,6 +296,80 @@ describe("the conformance checks", () => {
         cameraEnabled: false,
       }),
     ).rejects.toBeInstanceOf(Skipped);
+  });
+
+  describe("reports no target for a heater that only reports its temperature", () => {
+    const check =
+      "reports no target for a heater that only reports its temperature";
+
+    it("fails a driver that reports a target for a sensor", async () => {
+      const module = patch((driver, ctx) => ({
+        connect: async () => {
+          await driver.connect();
+          ctx.emit({
+            type: "telemetry",
+            telemetry: {
+              temperatures: { chamber: { actualC: 30, targetC: 40 } },
+            },
+          });
+        },
+      }));
+
+      await expect(runCheck(check, module)).rejects.toThrow(/chamber/);
+    });
+
+    it("waits for readings sent just after connecting", async () => {
+      const module = patch((driver, ctx) => ({
+        connect: async () => {
+          await driver.connect();
+          setTimeout(() => {
+            ctx.emit({
+              type: "telemetry",
+              telemetry: {
+                temperatures: { chamber: { actualC: 30, targetC: 0 } },
+              },
+            });
+          }, 10);
+        },
+      }));
+
+      await expect(runCheck(check, module)).rejects.toThrow(/chamber/);
+    });
+
+    it("skips a printer with no read-only heaters", async () => {
+      await expect(
+        runCheck(check, fakeDriver, { tickMs: 5, sensor: false }),
+      ).rejects.toBeInstanceOf(Skipped);
+    });
+  });
+
+  describe("reports filament slots the server accepts, if it has any", () => {
+    const check = "reports filament slots the server accepts, if it has any";
+
+    it("fails a readout the server would refuse", async () => {
+      const module = patch((driver, ctx) => ({
+        connect: async () => {
+          await driver.connect();
+          const unit: FilamentUnit = {
+            id: "changer",
+            kind: "changer",
+            label: "Changer",
+            slots: [],
+          };
+          ctx.emit({ type: "filament", filament: { units: [unit, unit] } });
+        },
+      }));
+
+      await expect(runCheck(check, module)).rejects.toThrow(
+        /would refuse the driver's filament readouts:\n.*Unit id "changer"/,
+      );
+    });
+
+    it("skips a printer that doesn't report filament", async () => {
+      await expect(
+        runCheck(check, fakeDriver, { tickMs: 5, filament: false }),
+      ).rejects.toBeInstanceOf(Skipped);
+    });
   });
 
   it("fail a driver that accepts an unknown extension", async () => {

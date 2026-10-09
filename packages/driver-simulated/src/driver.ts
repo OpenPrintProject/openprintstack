@@ -50,6 +50,7 @@ export const DEFAULT_ERROR_MESSAGE = "A simulated error was injected.";
 type Sent = {
   status?: string;
   job?: string;
+  filament?: string;
   telemetry: Record<string, string>;
 };
 
@@ -296,9 +297,10 @@ export class SimulatedDriver implements PrinterDriver {
 
   /**
    * Reports the printer's new events, then whatever changed in its job,
-   * telemetry and status, in that order: e.g. `completed`, then `job: null`,
-   * then the cooled heaters, then `idle`. While offline, events wait in the
-   * backlog and state is sent in full on reconnect.
+   * telemetry, filament and status, in that order: e.g. `completed`, then
+   * `job: null`, then the cooled heaters, then slot 1 back to loaded, then
+   * `idle`. While offline, events wait in the backlog and state is sent in
+   * full on reconnect.
    */
   #sync(): void {
     for (const event of this.#printer.takeEvents()) {
@@ -327,6 +329,13 @@ export class SimulatedDriver implements PrinterDriver {
       this.#emit({ type: "telemetry", telemetry: patch });
     }
 
+    const filament = this.#printer.filament();
+    const filamentJson = JSON.stringify(filament);
+    if (filamentJson !== this.#sent.filament) {
+      this.#sent.filament = filamentJson;
+      this.#emit({ type: "filament", filament });
+    }
+
     const status = this.#printer.statusInfo();
     const statusJson = JSON.stringify(status);
     if (statusJson !== this.#sent.status) {
@@ -337,8 +346,10 @@ export class SimulatedDriver implements PrinterDriver {
 
   /**
    * Reports everything, as the host has nothing: it resets its telemetry
-   * whenever a printer goes offline. The status comes first, so the printer
-   * is back before anything that happened while it was away.
+   * whenever a printer goes offline. (It keeps the filament readout, though,
+   * and publishes nothing when the same one comes again.) The status comes
+   * first, so the printer is back before anything that happened while it was
+   * away.
    */
   #goOnline(): void {
     this.#online = true;

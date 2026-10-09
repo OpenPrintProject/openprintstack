@@ -64,6 +64,11 @@ export const simulatedSettingsSchema = z.object({
     title: "Camera",
     description: "Whether the printer has a camera that takes snapshots.",
   }),
+  filamentSlots: z.boolean().default(false).meta({
+    title: "Filament slots",
+    description:
+      "Whether the printer reports a filament changer with 4 slots, as a CANVAS or an AMS does.",
+  }),
   accessCode: z.string().max(64).optional().meta({
     title: "Access code",
     description:

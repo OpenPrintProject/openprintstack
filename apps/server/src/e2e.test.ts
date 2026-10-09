@@ -75,7 +75,7 @@ describe("the whole system", () => {
       const added = await call("POST", "/api/printers", {
         name: "Sim",
         driverType: "simulated",
-        settings: { speedMultiplier: 1000 },
+        settings: { speedMultiplier: 1000, filamentSlots: true },
       });
       expect(added.status).toBe(201);
       const { id: printerId } = (await added.json()) as { id: string };
@@ -86,7 +86,14 @@ describe("the whole system", () => {
       client.send({ type: "subscribe", topic });
       expect(
         await client.nextMatching((m) => m.type === "snapshot"),
-      ).toMatchObject({ data: { state: { status: "idle" } } });
+      ).toMatchObject({
+        data: {
+          state: {
+            status: "idle",
+            filament: { units: [{ label: "Simulated changer" }] },
+          },
+        },
+      });
 
       // Upload and print.
       const uploaded = await call(
@@ -209,6 +216,15 @@ describe("the whole system", () => {
       expect(printRequested).toBeLessThan(jobStarted);
       expect(jobStarted).toBeLessThan(jobEndedAt);
       expect(jobEndedAt).toBeLessThan(idleAfter);
+
+      // Every filament change, and only the changes: slot 1 when it was
+      // added, active for the job, then loaded again.
+      const slot1 = stored.flatMap((e) =>
+        e.type === "printer.filament_changed"
+          ? [e.payload.filament?.units[0]?.slots[0]?.status]
+          : [],
+      );
+      expect(slot1).toEqual(["loaded", "active", "loaded"]);
     },
   );
 });

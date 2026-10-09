@@ -12,15 +12,31 @@ export const HeaterKind = z
 
 export type HeaterKind = z.infer<typeof HeaterKind>;
 
+const heaterFields = {
+  /** The key for this heater in `Telemetry.temperatures`. */
+  id: Id,
+  kind: HeaterKind,
+  label: z.string(),
+};
+
+/**
+ * A heater `temperature.set` can change, or one that only reports its
+ * temperature (a sensor, such as a chamber thermometer), which has no limit.
+ */
 export const Heater = z
-  .object({
-    /** The key for this heater in `Telemetry.temperatures`. */
-    id: Id,
-    kind: HeaterKind,
-    label: z.string(),
-    /** The highest target the server will send, in °C. */
-    maxC: z.number(),
-  })
+  .discriminatedUnion("controllable", [
+    z.object({
+      ...heaterFields,
+      controllable: z.literal(true),
+      /** The highest target the server will send, in °C. */
+      maxC: z.number(),
+    }),
+    z.object({
+      ...heaterFields,
+      controllable: z.literal(false),
+      maxC: z.null(),
+    }),
+  ])
   .meta({ id: "Heater" });
 
 export type Heater = z.infer<typeof Heater>;
