@@ -13,6 +13,9 @@ catalog:
   eslint: ^10.12.0
   eslint-config-prettier: ^10.1.8
   globals: ^17.13.0
+  # The CC2 driver's MQTT client. The server lists it too: its build loads npm
+  # packages from its own node_modules, so it must find mqtt there.
+  mqtt: ^5.16.0
   prettier: ^3.9.9
   # typescript-eslint supports TypeScript <6.1.0, so stay on 6.0.x until it supports newer releases.
   typescript: ~6.0.3

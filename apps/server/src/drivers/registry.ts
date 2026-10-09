@@ -37,6 +37,10 @@ export const DRIVER_SOURCES = {
     specifier: "@openprintstack/driver-simulated",
     load: () => import("@openprintstack/driver-simulated"),
   },
+  "elegoo-cc2": {
+    specifier: "@openprintstack/driver-elegoo-cc2",
+    load: () => import("@openprintstack/driver-elegoo-cc2"),
+  },
 } as const satisfies Readonly<Record<string, DriverSource>>;
 
 export class DriverRegistry {

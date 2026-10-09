@@ -21,8 +21,8 @@ function registryOf(imported: unknown) {
 }
 
 describe("DRIVER_SOURCES", () => {
-  it("has Phase 0's one driver type", () => {
-    expect(Object.keys(DRIVER_SOURCES)).toEqual(["simulated"]);
+  it("has the simulated printer and the Elegoo Centauri Carbon 2", () => {
+    expect(Object.keys(DRIVER_SOURCES)).toEqual(["simulated", "elegoo-cc2"]);
   });
 
   it.each(Object.entries(DRIVER_SOURCES))(
@@ -39,12 +39,23 @@ describe("DriverRegistry", () => {
 
     const module = await registry.load("simulated");
 
-    expect(registry.types()).toEqual(["simulated"]);
+    expect(registry.types()).toEqual(["simulated", "elegoo-cc2"]);
     expect(module.manifest).toMatchObject({
       type: "simulated",
       name: "Simulated printer",
     });
     expect(module.settingsSchema).toBeInstanceOf(z.ZodObject);
+  });
+
+  it("loads the CC2 driver by default", async () => {
+    const registry = new DriverRegistry();
+
+    const module = await registry.load("elegoo-cc2");
+
+    expect(module.manifest).toMatchObject({
+      type: "elegoo-cc2",
+      name: "Elegoo Centauri Carbon 2",
+    });
   });
 
   it("imports each module once", async () => {
