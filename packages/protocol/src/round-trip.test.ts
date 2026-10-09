@@ -10,8 +10,10 @@ import type { z } from "zod";
 import {
   apiErrorFixture,
   cameraFixture,
+  capabilitiesFixture,
   commandFixtures,
   eventFixtures,
+  filamentFixture,
   printerFileFixtures,
   snapshotFixture,
   wsClientMessageFixtures,
@@ -20,6 +22,8 @@ import {
 import {
   ApiError,
   Camera,
+  Capabilities,
+  Filament,
   OpsEvent,
   PrinterCommand,
   PrinterFile,
@@ -57,7 +61,31 @@ const cases: Case[] = [
     file,
   ]),
   ["camera", Camera, cameraFixture],
+  [
+    "capabilities with a read-only heater",
+    Capabilities,
+    {
+      ...capabilitiesFixture,
+      heaters: [
+        ...capabilitiesFixture.heaters,
+        {
+          id: "chamber",
+          kind: "chamber",
+          label: "Chamber",
+          controllable: false,
+          maxC: null,
+        },
+      ],
+    },
+  ],
+  ["filament", Filament, filamentFixture],
+  ["filament with nothing attached", Filament, { units: [] }],
   ["printer snapshot", PrinterSnapshot, snapshotFixture],
+  [
+    "printer snapshot without filament",
+    PrinterSnapshot,
+    { ...snapshotFixture, state: { ...snapshotFixture.state, filament: null } },
+  ],
   ["API error", ApiError, apiErrorFixture],
 ];
 

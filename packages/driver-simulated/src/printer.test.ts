@@ -75,7 +75,7 @@ describe("a new printer", () => {
       temperatures: {
         nozzle: { actualC: 25, targetC: 0 },
         bed: { actualC: 25, targetC: 0 },
-        chamber: { actualC: 25, targetC: 0 },
+        chamber: { actualC: 25, targetC: null },
       },
       fans: { part: { percent: 0 }, hotend: { percent: 0 } },
       speedPercent: 100,
@@ -154,22 +154,32 @@ describe("heating", () => {
     });
   });
 
-  it("only heats the chamber when asked, at the bed's rate", () => {
+  it("warms the chamber with the bed, a third of the way from the room's temperature", () => {
     const printer = createPrinter();
-    startPrinting(printer);
+    printer.startPrint("cube.gcode");
+    const readings = [];
+    for (let tick = 0; tick < 4; tick++) {
+      printer.advance(0.5);
+      readings.push(temperature(printer, "chamber"));
+    }
+
+    // The bed goes 25 → 60 °C, so the chamber goes 25 → 36.7 °C.
+    expect(readings).toEqual([
+      { actualC: 27.9, targetC: null },
+      { actualC: 30.8, targetC: null },
+      { actualC: 33.8, targetC: null },
+      { actualC: 36.7, targetC: null },
+    ]);
+
+    printer.cancel();
+    advance(printer, 12);
     expect(temperature(printer, "chamber")).toEqual({
       actualC: 25,
-      targetC: 0,
+      targetC: null,
     });
-
-    printer.setTemperature({ heaterId: "chamber", targetC: 60 });
-    advance(printer, 2);
-    expect(temperature(printer, "chamber")?.actualC).toBe(42.5);
-    advance(printer, 2);
-    expect(temperature(printer, "chamber")?.actualC).toBe(60);
   });
 
-  it("refuses targets above a heater's maximum and unknown heaters", () => {
+  it("refuses targets above a heater's maximum, the chamber sensor and unknown heaters", () => {
     const printer = createPrinter();
 
     expect(
@@ -183,9 +193,12 @@ describe("heating", () => {
     ).toBe("printer_rejected");
     expect(
       refusal(() =>
-        printer.setTemperature({ heaterId: "chamber", targetC: 61 }),
-      ).code,
-    ).toBe("printer_rejected");
+        printer.setTemperature({ heaterId: "chamber", targetC: 0 }),
+      ),
+    ).toMatchObject({
+      code: "not_supported",
+      message: "The chamber only reports its temperature.",
+    });
     expect(
       refusal(() => printer.setTemperature({ heaterId: "tool1", targetC: 0 }))
         .code,
@@ -208,6 +221,88 @@ describe("heating", () => {
     printer.setTemperature({ heaterId: "nozzle", targetC: 0 });
     advance(printer, 1);
     expect(printer.telemetry().fans.hotend).toEqual({ percent: 0 });
+  });
+});
+
+describe("filament", () => {
+  const slots = (printer: SimulatedPrinter) =>
+    printer.filament()?.units[0]?.slots.map((slot) => slot.status);
+
+  it("reports none without the Filament slots setting", () => {
+    expect(createPrinter().filament()).toBeNull();
+  });
+
+  it("reports one changer of 4 slots, the last one empty", () => {
+    const printer = createPrinter({ filamentSlots: true });
+
+    expect(printer.filament()).toEqual({
+      units: [
+        {
+          id: "changer",
+          kind: "changer",
+          label: "Simulated changer",
+          slots: [
+            {
+              id: "1",
+              label: "Slot 1",
+              status: "loaded",
+              material: "PLA",
+              name: "White",
+              colorHex: "#ffffff",
+              nozzleMinC: 190,
+              nozzleMaxC: 230,
+            },
+            {
+              id: "2",
+              label: "Slot 2",
+              status: "loaded",
+              material: "PLA",
+              name: "Black",
+              colorHex: "#1a1a1a",
+              nozzleMinC: 190,
+              nozzleMaxC: 230,
+            },
+            {
+              id: "3",
+              label: "Slot 3",
+              status: "loaded",
+              material: "PETG",
+              name: "Red",
+              colorHex: "#c62828",
+              nozzleMinC: 220,
+              nozzleMaxC: 260,
+            },
+            {
+              id: "4",
+              label: "Slot 4",
+              status: "empty",
+              material: null,
+              name: null,
+              colorHex: null,
+              nozzleMinC: null,
+              nozzleMaxC: null,
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("makes slot 1 active from the start of a job until it ends, through a pause and an error", () => {
+    const printer = createPrinter({ filamentSlots: true });
+
+    printer.startPrint("cube.gcode");
+    expect(slots(printer)).toEqual(["active", "loaded", "loaded", "empty"]);
+    advance(printer, 6);
+    printer.pause();
+    advance(printer, 6);
+    expect(printer.status).toBe("paused");
+    expect(slots(printer)?.[0]).toBe("active");
+    printer.fail("Jammed.");
+    expect(slots(printer)?.[0]).toBe("active");
+
+    printer.clearError();
+    expect(slots(printer)).toEqual(["loaded", "loaded", "loaded", "empty"]);
   });
 });
 

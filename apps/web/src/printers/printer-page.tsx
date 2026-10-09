@@ -11,6 +11,7 @@ import { usePrinter } from "../realtime/provider.tsx";
 import { CameraCard } from "./detail/camera-card.tsx";
 import { DeletePrinter } from "./detail/delete-printer.tsx";
 import { FansCard } from "./detail/fans-card.tsx";
+import { FilamentCard } from "./detail/filament-card.tsx";
 import { FilesCard } from "./detail/files-card.tsx";
 import { MotionCard } from "./detail/motion-card.tsx";
 import { PrintCard } from "./detail/print-card.tsx";
@@ -83,6 +84,7 @@ export function PrinterPage({ printerId }: { printerId: string }) {
       <div className="grid items-start gap-4 md:grid-cols-2">
         <PrintCard snapshot={snapshot} />
         <TemperaturesCard snapshot={snapshot} />
+        <FilamentCard snapshot={snapshot} />
         <FilesCard snapshot={snapshot} />
         <MotionCard snapshot={snapshot} />
         <FansCard snapshot={snapshot} />

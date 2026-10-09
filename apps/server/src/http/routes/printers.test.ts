@@ -4,6 +4,8 @@
 import { PrinterSnapshot } from "@openprintstack/protocol";
 import { describe, expect, it, vi } from "vitest";
 
+// The web app's hand copy of the simulated type, checked below.
+import { SIMULATED_DRIVER_TYPE } from "../../../../web/src/test/fixtures.ts";
 import { TEST_DRIVER_TYPE } from "../../drivers/test-driver.ts";
 import { jsonLines } from "../../test-utils.ts";
 import { apiError, testApp } from "../test-app.ts";
@@ -73,6 +75,22 @@ describe("GET /api/driver-types", () => {
         },
       },
     });
+  });
+
+  it("gives the simulated type exactly as the web app's tests copy it", async () => {
+    // The web app can't import driver packages, so its tests use a copy of
+    // this answer written out by hand. This keeps the copy true.
+    const t = await testApp();
+    const { token } = await t.setupAdmin();
+
+    const answer = await t.call("GET", "/api/driver-types", { token });
+
+    const { driverTypes } = await json<{ driverTypes: { type: string }[] }>(
+      answer,
+    );
+    expect(driverTypes.find((type) => type.type === "simulated")).toStrictEqual(
+      SIMULATED_DRIVER_TYPE,
+    );
   });
 
   it("leaves out a driver type that can't load, and logs it", async () => {

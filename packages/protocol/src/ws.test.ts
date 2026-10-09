@@ -136,6 +136,7 @@ const PRINTER_TYPES = [
   "printer.job_started",
   "printer.job_ended",
   "printer.files_changed",
+  "printer.filament_changed",
   "command.requested",
   "command.result",
   "printer.added",

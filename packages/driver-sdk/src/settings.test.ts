@@ -26,6 +26,8 @@ const networked = defineDriver({
       tickMs: 20,
       cameraEnabled: false,
       reachable: true,
+      filament: true,
+      sensor: true,
     }),
   create: () => {
     throw new Error("Not used.");
@@ -58,6 +60,8 @@ describe("defaultSettings", () => {
       tickMs: 20,
       cameraEnabled: true,
       reachable: true,
+      filament: true,
+      sensor: true,
     });
   });
 });

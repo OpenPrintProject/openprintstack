@@ -4,7 +4,8 @@
 import type { components } from "../api/schema.gen.ts";
 
 // What the server sends for the simulated driver type (GET /api/driver-types),
-// written out: the web app can't import driver packages.
+// written out: the web app can't import driver packages. The server's test of
+// that route checks this copy against the real answer.
 
 /** The simulated printer's settings JSON Schema, as Zod writes it. */
 export const SIMULATED_SETTINGS_SCHEMA = {
@@ -92,6 +93,13 @@ export const SIMULATED_SETTINGS_SCHEMA = {
       description: "Whether the printer has a camera that takes snapshots.",
       type: "boolean",
     },
+    filamentSlots: {
+      default: false,
+      title: "Filament slots",
+      description:
+        "Whether the printer reports a filament changer with 4 slots, as a CANVAS or an AMS does.",
+      type: "boolean",
+    },
     accessCode: {
       title: "Access code",
       description:
@@ -121,6 +129,7 @@ export const SIMULATED_DEFAULTS = {
   buildVolumeZMm: 256,
   maxMoveSpeedMmS: 200,
   cameraEnabled: true,
+  filamentSlots: false,
 } as const;
 
 export const SIMULATED_DRIVER_TYPE: components["schemas"]["DriverType"] = {

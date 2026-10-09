@@ -46,6 +46,7 @@ export {
 export {
   DriverAlertMessage,
   DriverCapabilitiesMessage,
+  DriverFilamentMessage,
   DriverFilesChangedMessage,
   DriverJobLifecycleMessage,
   DriverJobMessage,

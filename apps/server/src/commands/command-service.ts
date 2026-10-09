@@ -213,10 +213,17 @@ export function checkSupported(
     return unsupported(`The printer doesn't support ${command.kind}.`);
   }
   switch (command.kind) {
-    case "temperature.set":
-      return capabilities.heaters.some(({ id }) => id === command.heaterId)
+    case "temperature.set": {
+      const heater = capabilities.heaters.find(
+        ({ id }) => id === command.heaterId,
+      );
+      if (heater === undefined) {
+        return unsupported(`The printer has no heater "${command.heaterId}".`);
+      }
+      return heater.controllable
         ? null
-        : unsupported(`The printer has no heater "${command.heaterId}".`);
+        : unsupported(`The ${heater.label} only reports its temperature.`);
+    }
     case "fan.set": {
       const fan = capabilities.fans.find(({ id }) => id === command.fanId);
       if (fan === undefined) {

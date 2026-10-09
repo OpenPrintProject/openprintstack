@@ -10,8 +10,10 @@ import { readFile } from "node:fs/promises";
 import type {
   Axis,
   Capabilities,
+  Filament,
   PrinterFile,
   PrinterStatus,
+  Telemetry,
 } from "@openprintstack/protocol";
 import { z } from "zod";
 
@@ -42,6 +44,10 @@ export const fakeSettingsSchema = z.object({
   cameraEnabled: z.boolean().default(true),
   /** When false, connect reports offline and keeps retrying. */
   reachable: z.boolean().default(true),
+  /** When false, it reports no filament slots. */
+  filament: z.boolean().default(true),
+  /** When false, it has no read-only heater. */
+  sensor: z.boolean().default(true),
 });
 
 type FakeSettings = z.output<typeof fakeSettingsSchema>;
@@ -63,7 +69,26 @@ function fakeCapabilities(settings: FakeSettings): Capabilities {
       "file.upload",
       "extension.invoke",
     ],
-    heaters: [{ id: "nozzle", kind: "nozzle", label: "Nozzle", maxC: 300 }],
+    heaters: [
+      {
+        id: "nozzle",
+        kind: "nozzle",
+        label: "Nozzle",
+        controllable: true,
+        maxC: 300,
+      },
+      ...(settings.sensor
+        ? [
+            {
+              id: "chamber",
+              kind: "chamber",
+              label: "Chamber",
+              controllable: false,
+              maxC: null,
+            } as const,
+          ]
+        : []),
+    ],
     fans: [
       { id: "part", kind: "part", label: "Part cooling", controllable: true },
     ],
@@ -83,6 +108,39 @@ function fakeCapabilities(settings: FakeSettings): Capabilities {
     extensions: ["fake"],
   };
 }
+
+/** One changer: a loaded slot and an empty one. */
+const FILAMENT: Filament = {
+  units: [
+    {
+      id: "changer",
+      kind: "changer",
+      label: "Changer",
+      slots: [
+        {
+          id: "1",
+          label: "Slot 1",
+          status: "loaded",
+          material: "PLA",
+          name: "Black",
+          colorHex: "#000000",
+          nozzleMinC: 190,
+          nozzleMaxC: 230,
+        },
+        {
+          id: "2",
+          label: "Slot 2",
+          status: "empty",
+          material: null,
+          name: null,
+          colorHex: null,
+          nozzleMinC: null,
+          nozzleMaxC: null,
+        },
+      ],
+    },
+  ],
+};
 
 /** Runs a synchronous step as an async method would: a throw rejects. */
 function run(step: () => void): Promise<void> {
@@ -133,6 +191,10 @@ class FakeDriver implements PrinterDriver {
           position: null,
           homedAxes: [],
         },
+      });
+      this.#ctx.emit({
+        type: "filament",
+        filament: this.#settings.filament ? FILAMENT : null,
       });
       this.#ctx.log.info("Connected.", { tickMs: this.#settings.tickMs });
       this.#timer = setInterval(() => this.#tick(), this.#settings.tickMs);
@@ -327,8 +389,11 @@ class FakeDriver implements PrinterDriver {
     });
   }
 
-  #temperatures() {
-    return { nozzle: { actualC: this.#actualC, targetC: this.#targetC } };
+  #temperatures(): Telemetry["temperatures"] {
+    const nozzle = { actualC: this.#actualC, targetC: this.#targetC };
+    // A sensor has no target.
+    const chamber = { actualC: 24, targetC: null };
+    return this.#settings.sensor ? { nozzle, chamber } : { nozzle };
   }
 
   #setStatus(

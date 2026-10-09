@@ -13,12 +13,13 @@ import {
   COMMAND_POLICY,
   type CommandKind,
   type ErrorInfo,
+  type Filament,
   type JobProgress,
   type PrinterStatus,
   type Telemetry,
 } from "@openprintstack/protocol";
 
-import { CHAMBER_MAX_C } from "./capabilities.ts";
+import { simulatedFilament } from "./filament.ts";
 import type { SimulatedSettings } from "./settings.ts";
 
 // The simulated printer itself: what a real printer's firmware would do. It
@@ -29,6 +30,12 @@ export const AMBIENT_C = 25;
 
 /** Preparing heats to these, or to the heater's maximum if that is lower. */
 export const PRINT_TEMPERATURES_C = { nozzle: 210, bed: 60 } as const;
+
+/**
+ * The chamber has no heater: it settles this share of the way from the room's
+ * temperature to the bed's, and moves at this share of the bed's rate.
+ */
+export const CHAMBER_SHARE = 1 / 3;
 
 /** The hotend fan runs at 100 % while the nozzle is hotter than this. */
 export const HOTEND_FAN_ON_C = 50;
@@ -55,7 +62,7 @@ export type StatusInfo = {
 export type PrinterEvent =
   DriverMessageOf<"job_lifecycle"> | DriverMessageOf<"alert">;
 
-type HeaterId = "nozzle" | "bed" | "chamber";
+type HeaterId = "nozzle" | "bed";
 
 type Heater = {
   readonly id: HeaterId;
@@ -80,19 +87,28 @@ type Job = {
 
 /**
  * Each heater changes at a steady rate, chosen so that heating from ambient to
- * print temperature takes exactly `heatUpS`. The chamber uses the bed's rate.
+ * print temperature takes exactly `heatUpS`.
  */
 function heatRate(toC: number, heatUpS: number): number {
   return heatUpS === 0 ? Infinity : (toC - AMBIENT_C) / heatUpS;
 }
 
+/** Moves `fromC` towards `goalC` by at most `ratePerS` × `dtS`. */
+function approach(
+  fromC: number,
+  goalC: number,
+  ratePerS: number,
+  dtS: number,
+): number {
+  const gap = goalC - fromC;
+  const step = ratePerS * dtS;
+  return Math.abs(gap) <= step ? goalC : fromC + Math.sign(gap) * step;
+}
+
 function stepHeater(heater: Heater, dtS: number): void {
   // A heater that is off cools to the room's temperature, never below it.
   const goal = Math.max(heater.targetC, AMBIENT_C);
-  const gap = goal - heater.actualC;
-  const step = heater.ratePerS * dtS;
-  heater.actualC =
-    Math.abs(gap) <= step ? goal : heater.actualC + Math.sign(gap) * step;
+  heater.actualC = approach(heater.actualC, goal, heater.ratePerS, dtS);
 }
 
 /** Whether preparing can stop waiting for this heater. */
@@ -108,6 +124,8 @@ function round(value: number, digits: number): number {
 export class SimulatedPrinter {
   readonly #settings: SimulatedSettings;
   readonly #heaters: readonly Heater[];
+  /** The chamber sensor's temperature, which follows the bed's. */
+  #chamberC = AMBIENT_C;
   readonly #volumeMm: Readonly<Record<Axis, number>>;
   readonly #homed = new Set<Axis>();
   readonly #position: Record<Axis, number> = { x: 0, y: 0, z: 0 };
@@ -146,7 +164,6 @@ export class SimulatedPrinter {
         heatRate(PRINT_TEMPERATURES_C.nozzle, settings.heatUpS),
       ),
       heater("bed", "bed", settings.bedMaxC, bedRate),
-      heater("chamber", "chamber", CHAMBER_MAX_C, bedRate),
     ];
     this.#volumeMm = {
       x: settings.buildVolumeXMm,
@@ -173,12 +190,16 @@ export class SimulatedPrinter {
     const nozzle = this.#heater("nozzle");
     const allHomed = AXES.every((axis) => this.#homed.has(axis));
     return {
-      temperatures: Object.fromEntries(
-        this.#heaters.map((heater) => [
-          heater.id,
-          { actualC: round(heater.actualC, 1), targetC: heater.targetC },
-        ]),
-      ),
+      temperatures: {
+        ...Object.fromEntries(
+          this.#heaters.map((heater) => [
+            heater.id,
+            { actualC: round(heater.actualC, 1), targetC: heater.targetC },
+          ]),
+        ),
+        // A sensor has no target.
+        chamber: { actualC: round(this.#chamberC, 1), targetC: null },
+      },
       fans: {
         part: { percent: this.#partFanPercent },
         hotend: { percent: nozzle.actualC > HOTEND_FAN_ON_C ? 100 : 0 },
@@ -207,6 +228,11 @@ export class SimulatedPrinter {
     };
   }
 
+  /** The filament changer's readout, or null if it has none. */
+  filament(): Filament | null {
+    return simulatedFilament(this.#settings, this.#job !== null);
+  }
+
   /** The events since the last call, oldest first. */
   takeEvents(): PrinterEvent[] {
     const events = this.#events;
@@ -219,6 +245,13 @@ export class SimulatedPrinter {
     for (const heater of this.#heaters) {
       stepHeater(heater, dtS);
     }
+    const bed = this.#heater("bed");
+    this.#chamberC = approach(
+      this.#chamberC,
+      AMBIENT_C + (bed.actualC - AMBIENT_C) * CHAMBER_SHARE,
+      bed.ratePerS * CHAMBER_SHARE,
+      dtS,
+    );
     if (this.#job !== null) {
       this.#job.elapsedS += dtS;
     }
@@ -349,6 +382,12 @@ export class SimulatedPrinter {
 
   setTemperature({ heaterId, targetC }: SetTemperatureRequest): void {
     this.#allow("temperature.set");
+    if (heaterId === "chamber") {
+      throw new DriverError(
+        "not_supported",
+        "The chamber only reports its temperature.",
+      );
+    }
     const heater = this.#heaters.find((candidate) => candidate.id === heaterId);
     if (heater === undefined) {
       throw new DriverError(

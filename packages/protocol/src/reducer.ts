@@ -14,6 +14,7 @@ export function initialPrinterState(ts: string): PrinterState {
     error: null,
     telemetry: emptyTelemetry(),
     capabilities: null,
+    filament: null,
     updatedAt: ts,
   };
 }
@@ -39,7 +40,8 @@ export function reducePrinterState(
         statusDetail: detail,
         error,
         // Readings from before a disconnect are stale, and a stale homed
-        // position must never allow a jog.
+        // position must never allow a jog. Capabilities and the filament
+        // readout are kept: they're still the best guess.
         telemetry: isOnline(status) ? state.telemetry : emptyTelemetry(),
         updatedAt: event.ts,
       };
@@ -54,6 +56,12 @@ export function reducePrinterState(
       return {
         ...state,
         capabilities: event.payload.capabilities,
+        updatedAt: event.ts,
+      };
+    case "printer.filament_changed":
+      return {
+        ...state,
+        filament: event.payload.filament,
         updatedAt: event.ts,
       };
     default:

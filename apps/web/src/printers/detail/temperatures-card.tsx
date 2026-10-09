@@ -14,20 +14,25 @@ import {
 import { FieldError } from "../../components/ui/field.tsx";
 import { Input } from "../../components/ui/input.tsx";
 import { useCommand, useCommandLock } from "../api.ts";
-import { commandGate, type Gate, withLock } from "../gating.ts";
+import { commandGate, type Gate, heaterGate, withLock } from "../gating.ts";
 import { temperatureText } from "../parts.tsx";
 import { GatedButton, GateHint } from "./controls.tsx";
 
 // Each heater's actual and target temperature, and, if the printer can set
 // them, a target field capped at the heater's maxC (checked here before
-// sending, as the server's safety check does) with Set and Off (0 °C).
+// sending, as the server's safety check does) with Set and Off (0 °C). A
+// heater that only reports its temperature (a sensor, such as a chamber
+// thermometer) shows its reading alone.
+
+/** A heater `temperature.set` can change. */
+type SettableHeater = Extract<Heater, { controllable: true }>;
 
 export function TemperaturesCard({ snapshot }: { snapshot: PrinterSnapshot }) {
   const { printer, state } = snapshot;
   const locked = useCommandLock(printer.id);
   const heaters = state.capabilities?.heaters ?? [];
   if (heaters.length === 0) return null;
-  const gate = commandGate(state, "temperature.set");
+  const anySettable = heaters.some((heater) => heaterGate(state, heater).shown);
   return (
     <Card>
       <CardHeader>
@@ -37,19 +42,40 @@ export function TemperaturesCard({ snapshot }: { snapshot: PrinterSnapshot }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <ul className="flex flex-col gap-3">
-          {heaters.map((heater) => (
-            <HeaterRow
-              key={heater.id}
-              printerId={printer.id}
-              heater={heater}
-              reading={temperatureText(state.telemetry.temperatures[heater.id])}
-              gate={withLock(gate, locked)}
-            />
-          ))}
+          {heaters.map((heater) => {
+            const reading = temperatureText(
+              state.telemetry.temperatures[heater.id],
+            );
+            return heater.controllable ? (
+              <HeaterRow
+                key={heater.id}
+                printerId={printer.id}
+                heater={heater}
+                reading={reading}
+                gate={withLock(heaterGate(state, heater), locked)}
+              />
+            ) : (
+              <li key={heater.id}>
+                <Reading label={heater.label} reading={reading} />
+              </li>
+            );
+          })}
         </ul>
-        <GateHint gate={gate} />
+        {anySettable && (
+          <GateHint gate={commandGate(state, "temperature.set")} />
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+/** A heater's name and its reading, e.g. "214.6 °C / 215 °C". */
+function Reading({ label, reading }: { label: string; reading: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 text-sm">
+      <span className="font-medium">{label}</span>
+      <span className="tabular-nums">{reading}</span>
+    </div>
   );
 }
 
@@ -84,7 +110,7 @@ function HeaterRow({
   gate,
 }: {
   printerId: string;
-  heater: Heater;
+  heater: SettableHeater;
   reading: string;
   gate: Gate;
 }) {
@@ -111,10 +137,7 @@ function HeaterRow({
 
   return (
     <li className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between gap-2 text-sm">
-        <span className="font-medium">{heater.label}</span>
-        <span className="tabular-nums">{reading}</span>
-      </div>
+      <Reading label={heater.label} reading={reading} />
       {gate.shown && (
         <form
           noValidate

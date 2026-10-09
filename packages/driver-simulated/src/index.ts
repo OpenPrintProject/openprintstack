@@ -32,7 +32,6 @@ export default simulatedDriver;
 export {
   ACCEPTED_EXTENSIONS,
   CAMERA,
-  CHAMBER_MAX_C,
   MAX_UPLOAD_BYTES,
   SIMULATOR_EXTENSION,
   simulatedCapabilities,

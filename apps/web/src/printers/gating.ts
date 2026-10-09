@@ -6,6 +6,7 @@ import {
   COMMAND_POLICY,
   type CommandKind,
   type Fan,
+  type Heater,
   isOnline,
   type PrinterState,
   type PrinterStatus,
@@ -16,8 +17,9 @@ import { STATUS_PHRASE } from "./status.ts";
 // Which controls a printer's page shows, and which it lets you use:
 //
 //   hidden     the printer's capabilities don't include it (the command
-//              kind, a fan that only reports its speed, uploads, the
-//              simulator extension), or it hasn't reported them yet
+//              kind, a heater or fan that only reports its reading,
+//              uploads, the simulator extension), or it hasn't reported
+//              them yet
 //   disabled   its status doesn't allow it, per protocol's COMMAND_POLICY
 //              (the table the server enforces), with the reason; also jogs
 //              until the axis is homed and the position known, as the
@@ -81,6 +83,14 @@ export function jogGate(state: PrinterState, axis: Axis): Gate {
     return disabled("Home first: the position isn't known.");
   }
   return gate;
+}
+
+/**
+ * A heater's target controls; hidden for a heater that only reports its
+ * temperature (a sensor).
+ */
+export function heaterGate(state: PrinterState, heater: Heater): Gate {
+  return heater.controllable ? commandGate(state, "temperature.set") : HIDDEN;
 }
 
 /** A fan's speed control; hidden for a fan that only reports its speed. */

@@ -576,7 +576,7 @@ export interface components {
             kind: "system";
         };
         /** @enum {string} */
-        EventType: "printer.telemetry" | "printer.status_changed" | "printer.capabilities_changed" | "printer.alert" | "printer.job_started" | "printer.job_ended" | "printer.files_changed" | "command.requested" | "command.result" | "printer.added" | "printer.updated" | "printer.removed" | "auth.setup_completed" | "auth.login_succeeded" | "auth.login_failed" | "auth.logout" | "system.started" | "system.stopping";
+        EventType: "printer.telemetry" | "printer.status_changed" | "printer.capabilities_changed" | "printer.alert" | "printer.job_started" | "printer.job_ended" | "printer.files_changed" | "printer.filament_changed" | "command.requested" | "command.result" | "printer.added" | "printer.updated" | "printer.removed" | "auth.setup_completed" | "auth.login_succeeded" | "auth.login_failed" | "auth.logout" | "system.started" | "system.stopping";
         ExtensionInvokeCommand: {
             /** @constant */
             kind: "extension.invoke";
@@ -601,6 +601,29 @@ export interface components {
             fanId: string;
             percent: number;
         };
+        Filament: {
+            units: components["schemas"]["FilamentUnit"][];
+        };
+        FilamentSlot: {
+            id: string;
+            label: string;
+            status: components["schemas"]["FilamentSlotStatus"];
+            material: string | null;
+            name: string | null;
+            colorHex: string | null;
+            nozzleMinC: number | null;
+            nozzleMaxC: number | null;
+        };
+        /** @enum {string} */
+        FilamentSlotStatus: "empty" | "loaded" | "active";
+        FilamentUnit: {
+            id: string;
+            kind: components["schemas"]["FilamentUnitKind"];
+            label: string;
+            slots: components["schemas"]["FilamentSlot"][];
+        };
+        /** @enum {string} */
+        FilamentUnitKind: "changer" | "external" | "other";
         FileCapabilities: {
             list: boolean;
             upload: boolean;
@@ -618,7 +641,16 @@ export interface components {
             id: string;
             kind: components["schemas"]["HeaterKind"];
             label: string;
+            /** @constant */
+            controllable: true;
             maxC: number;
+        } | {
+            id: string;
+            kind: components["schemas"]["HeaterKind"];
+            label: string;
+            /** @constant */
+            controllable: false;
+            maxC: null;
         };
         /** @enum {string} */
         HeaterKind: "nozzle" | "bed" | "chamber";
@@ -659,7 +691,7 @@ export interface components {
                 [key: string]: components["schemas"]["JsonValue"];
             };
         };
-        OpsEvent: components["schemas"]["PrinterTelemetryEvent"] | components["schemas"]["PrinterStatusChangedEvent"] | components["schemas"]["PrinterCapabilitiesChangedEvent"] | components["schemas"]["PrinterAlertEvent"] | components["schemas"]["PrinterJobStartedEvent"] | components["schemas"]["PrinterJobEndedEvent"] | components["schemas"]["PrinterFilesChangedEvent"] | components["schemas"]["CommandRequestedEvent"] | components["schemas"]["CommandResultEvent"] | components["schemas"]["PrinterAddedEvent"] | components["schemas"]["PrinterUpdatedEvent"] | components["schemas"]["PrinterRemovedEvent"] | components["schemas"]["AuthSetupCompletedEvent"] | components["schemas"]["AuthLoginSucceededEvent"] | components["schemas"]["AuthLoginFailedEvent"] | components["schemas"]["AuthLogoutEvent"] | components["schemas"]["SystemStartedEvent"] | components["schemas"]["SystemStoppingEvent"];
+        OpsEvent: components["schemas"]["PrinterTelemetryEvent"] | components["schemas"]["PrinterStatusChangedEvent"] | components["schemas"]["PrinterCapabilitiesChangedEvent"] | components["schemas"]["PrinterAlertEvent"] | components["schemas"]["PrinterJobStartedEvent"] | components["schemas"]["PrinterJobEndedEvent"] | components["schemas"]["PrinterFilesChangedEvent"] | components["schemas"]["PrinterFilamentChangedEvent"] | components["schemas"]["CommandRequestedEvent"] | components["schemas"]["CommandResultEvent"] | components["schemas"]["PrinterAddedEvent"] | components["schemas"]["PrinterUpdatedEvent"] | components["schemas"]["PrinterRemovedEvent"] | components["schemas"]["AuthSetupCompletedEvent"] | components["schemas"]["AuthLoginSucceededEvent"] | components["schemas"]["AuthLoginFailedEvent"] | components["schemas"]["AuthLogoutEvent"] | components["schemas"]["SystemStartedEvent"] | components["schemas"]["SystemStoppingEvent"];
         Position: {
             x: number;
             y: number;
@@ -757,6 +789,24 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        PrinterFilamentChangedEvent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            ts: string;
+            seq: number;
+            bootId: string;
+            correlationId: string | null;
+            source: components["schemas"]["EventSource"];
+            printerId: string;
+            /** @constant */
+            type: "printer.filament_changed";
+            /** @constant */
+            category: "state";
+            payload: {
+                filament: components["schemas"]["Filament"] | null;
+            };
+        };
         PrinterFile: {
             name: string;
             sizeBytes: number | null;
@@ -849,6 +899,7 @@ export interface components {
             error: components["schemas"]["ErrorInfo"] | null;
             telemetry: components["schemas"]["Telemetry"];
             capabilities: components["schemas"]["Capabilities"] | null;
+            filament: components["schemas"]["Filament"] | null;
             /** Format: date-time */
             updatedAt: string;
         };

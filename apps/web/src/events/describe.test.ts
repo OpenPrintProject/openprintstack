@@ -154,6 +154,15 @@ describe("eventSummary", () => {
     expect(summary("printer.updated", { changedFields: [] })).toBeNull();
   });
 
+  it("sums up filament per unit: how many slots are loaded, and which is active", () => {
+    expect(
+      eventSummary(eventFixtures["printer.filament_changed"], CONTEXT),
+    ).toBe("CANVAS 1: 2 of 3 loaded, Tray 1 active (PLA · Matte Black)");
+    expect(summary("printer.filament_changed", { filament: null })).toBe(
+      "Not reported",
+    );
+  });
+
   it("words auth and system events, and nothing where the label says it all", () => {
     expect(summary("auth.login_failed", { username: "bob" })).toBe(
       "Username “bob”",

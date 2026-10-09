@@ -3389,6 +3389,7 @@
           "printer.job_started",
           "printer.job_ended",
           "printer.files_changed",
+          "printer.filament_changed",
           "command.requested",
           "command.result",
           "printer.added",
@@ -3498,6 +3499,123 @@
           "percent"
         ]
       },
+      "Filament": {
+        "type": "object",
+        "properties": {
+          "units": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FilamentUnit"
+            }
+          }
+        },
+        "required": [
+          "units"
+        ]
+      },
+      "FilamentSlot": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FilamentSlotStatus"
+          },
+          "material": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "colorHex": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^#[0-9a-f]{6}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nozzleMinC": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "nozzleMaxC": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "status",
+          "material",
+          "name",
+          "colorHex",
+          "nozzleMinC",
+          "nozzleMaxC"
+        ]
+      },
+      "FilamentSlotStatus": {
+        "type": "string",
+        "enum": [
+          "empty",
+          "loaded",
+          "active"
+        ]
+      },
+      "FilamentUnit": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FilamentUnitKind"
+          },
+          "label": {
+            "type": "string"
+          },
+          "slots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FilamentSlot"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "slots"
+        ]
+      },
+      "FilamentUnitKind": {
+        "type": "string",
+        "enum": [
+          "changer",
+          "external",
+          "other"
+        ]
+      },
       "FileCapabilities": {
         "type": "object",
         "properties": {
@@ -3556,27 +3674,65 @@
         ]
       },
       "Heater": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "minLength": 1
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "$ref": "#/components/schemas/HeaterKind"
+              },
+              "label": {
+                "type": "string"
+              },
+              "controllable": {
+                "type": "boolean",
+                "const": true
+              },
+              "maxC": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "label",
+              "controllable",
+              "maxC"
+            ]
           },
-          "kind": {
-            "$ref": "#/components/schemas/HeaterKind"
-          },
-          "label": {
-            "type": "string"
-          },
-          "maxC": {
-            "type": "number"
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "$ref": "#/components/schemas/HeaterKind"
+              },
+              "label": {
+                "type": "string"
+              },
+              "controllable": {
+                "type": "boolean",
+                "const": false
+              },
+              "maxC": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "label",
+              "controllable",
+              "maxC"
+            ]
           }
-        },
-        "required": [
-          "id",
-          "kind",
-          "label",
-          "maxC"
         ]
       },
       "HeaterKind": {
@@ -3784,6 +3940,9 @@
           },
           {
             "$ref": "#/components/schemas/PrinterFilesChangedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/PrinterFilamentChangedEvent"
           },
           {
             "$ref": "#/components/schemas/CommandRequestedEvent"
@@ -4221,6 +4380,86 @@
         ],
         "description": "A printer's stored config. Settings are stored with every default filled in; write-only ones are never returned."
       },
+      "PrinterFilamentChangedEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bootId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "printerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "printer.filament_changed"
+          },
+          "category": {
+            "type": "string",
+            "const": "state"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "filament": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Filament"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "filament"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "seq",
+          "bootId",
+          "correlationId",
+          "source",
+          "printerId",
+          "type",
+          "category",
+          "payload"
+        ]
+      },
       "PrinterFile": {
         "type": "object",
         "properties": {
@@ -4623,6 +4862,16 @@
               }
             ]
           },
+          "filament": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Filament"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time",
@@ -4635,6 +4884,7 @@
           "error",
           "telemetry",
           "capabilities",
+          "filament",
           "updatedAt"
         ]
       },

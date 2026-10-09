@@ -21,6 +21,7 @@ import {
   emptyTelemetry,
   type ErrorInfo,
   type EventSource,
+  type Filament,
   type PrinterStatus,
   type Telemetry,
 } from "@openprintstack/protocol";
@@ -41,6 +42,7 @@ import { redactSecrets, secretValues } from "./secrets.ts";
 //   telemetry, job → printer.telemetry, the full merged telemetry
 //   job_lifecycle  → printer.job_started or printer.job_ended
 //   capabilities   → printer.capabilities_changed, only when they change
+//   filament       → printer.filament_changed, only when it changes
 //   files_changed  → printer.files_changed
 //   alert          → printer.alert
 //   log            → the server's log, not the bus (its data merged in)
@@ -140,6 +142,11 @@ export class DriverHost {
   #telemetry: Telemetry = emptyTelemetry();
   /** The capabilities last published, carried across restarts. */
   #capabilities: Capabilities | null = null;
+  /**
+   * The filament readout last published, carried across restarts and kept
+   * while the printer is offline, as the shared reducer keeps it.
+   */
+  #filament: Filament | null = null;
   #client: DriverClient | null = null;
   /** The running driver's secret values, set by each start. */
   #secrets: readonly string[] = [];
@@ -409,6 +416,16 @@ export class DriverHost {
       }
       case "capabilities":
         this.#publishCapabilities(message.capabilities, DRIVER);
+        return;
+      case "filament":
+        if (isDeepStrictEqual(message.filament, this.#filament)) return;
+        this.#filament = message.filament;
+        this.#bus.publish({
+          type: "printer.filament_changed",
+          printerId,
+          source: DRIVER,
+          payload: { filament: message.filament },
+        });
         return;
       case "files_changed":
         this.#bus.publish({

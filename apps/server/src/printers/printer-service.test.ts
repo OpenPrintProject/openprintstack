@@ -409,6 +409,7 @@ describe("PrinterService.add", () => {
       buildVolumeZMm: 256,
       maxMoveSpeedMmS: 200,
       cameraEnabled: true,
+      filamentSlots: false,
     });
     expect(store.get(printer.id)?.state).toMatchObject({
       status: "idle",

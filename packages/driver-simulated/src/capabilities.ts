@@ -8,9 +8,6 @@ import type { SimulatedSettings } from "./settings.ts";
 /** The extension behind the UI's Simulator panel. */
 export const SIMULATOR_EXTENSION = "simulator";
 
-/** The chamber's limit. Not a setting, so the settings match the plan. */
-export const CHAMBER_MAX_C = 60;
-
 export const ACCEPTED_EXTENSIONS: readonly string[] = [".gcode", ".3mf"];
 
 /** 1 GiB. */
@@ -29,14 +26,24 @@ export function simulatedCapabilities(
         id: "nozzle",
         kind: "nozzle",
         label: "Nozzle",
+        controllable: true,
         maxC: settings.nozzleMaxC,
       },
-      { id: "bed", kind: "bed", label: "Bed", maxC: settings.bedMaxC },
+      {
+        id: "bed",
+        kind: "bed",
+        label: "Bed",
+        controllable: true,
+        maxC: settings.bedMaxC,
+      },
+      // A sensor that warms with the bed, as a real enclosure's does, so the
+      // UI has a heater it can show but not set.
       {
         id: "chamber",
         kind: "chamber",
         label: "Chamber",
-        maxC: CHAMBER_MAX_C,
+        controllable: false,
+        maxC: null,
       },
     ],
     fans: [

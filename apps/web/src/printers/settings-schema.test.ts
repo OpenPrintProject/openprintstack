@@ -50,6 +50,7 @@ describe("settingsFields", () => {
       "buildVolumeZMm",
       "maxMoveSpeedMmS",
       "cameraEnabled",
+      "filamentSlots",
       "accessCode",
     ]);
     expect(fields[0]).toEqual({
@@ -81,6 +82,15 @@ describe("settingsFields", () => {
       default: true,
     });
     expect(fields[10]).toEqual({
+      key: "filamentSlots",
+      label: "Filament slots",
+      description:
+        "Whether the printer reports a filament changer with 4 slots, as a CANVAS or an AMS does.",
+      required: false,
+      kind: "boolean",
+      default: false,
+    });
+    expect(fields[11]).toEqual({
       key: "accessCode",
       label: "Access code",
       description:
@@ -305,6 +315,7 @@ describe("settingsSchema", () => {
       buildVolumeZMm: 256,
       maxMoveSpeedMmS: 200,
       cameraEnabled: true,
+      filamentSlots: false,
     });
   });
 

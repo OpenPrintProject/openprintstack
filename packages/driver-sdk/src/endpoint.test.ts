@@ -84,6 +84,8 @@ describe("serveDriver", () => {
       tickMs: 20,
       cameraEnabled: true,
       reachable: true,
+      filament: true,
+      sensor: true,
     });
   });
 
@@ -104,9 +106,10 @@ describe("serveDriver", () => {
       "capabilities",
       "status",
       "telemetry",
+      "filament",
       "log",
     ]);
-    expect(messages[3]).toEqual({
+    expect(messages[4]).toEqual({
       type: "log",
       level: "info",
       message: "Connected.",

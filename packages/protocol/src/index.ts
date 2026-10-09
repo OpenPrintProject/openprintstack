@@ -53,6 +53,7 @@ export {
   PrinterAddedEvent,
   PrinterAlertEvent,
   PrinterCapabilitiesChangedEvent,
+  PrinterFilamentChangedEvent,
   PrinterFilesChangedEvent,
   PrinterJobEndedEvent,
   PrinterJobStartedEvent,
@@ -63,6 +64,13 @@ export {
   SystemStartedEvent,
   SystemStoppingEvent,
 } from "./events.ts";
+export {
+  Filament,
+  FilamentSlot,
+  FilamentSlotStatus,
+  FilamentUnit,
+  FilamentUnitKind,
+} from "./filament.ts";
 export { PrinterFile } from "./files.ts";
 export { COMMAND_POLICY, type CommandPolicy } from "./policy.ts";
 export { PrinterName } from "./printers.ts";

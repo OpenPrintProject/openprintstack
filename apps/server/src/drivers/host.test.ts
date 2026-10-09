@@ -13,7 +13,10 @@ import {
   type PrinterStatus,
   Telemetry,
 } from "@openprintstack/protocol";
-import { telemetryFixture } from "@openprintstack/protocol/fixtures";
+import {
+  filamentFixture,
+  telemetryFixture,
+} from "@openprintstack/protocol/fixtures";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { EventBus } from "../bus/bus.ts";
@@ -454,6 +457,14 @@ describe("DriverHost: driver messages become events", () => {
       { type: "capabilities", capabilities },
       { type: "printer.capabilities_changed", payload: { capabilities } },
     ],
+    [
+      "filament",
+      { type: "filament", filament: filamentFixture },
+      {
+        type: "printer.filament_changed",
+        payload: { filament: filamentFixture },
+      },
+    ],
   ])("%s", async (_, message, expected) => {
     const { published, started } = await setup();
     const driver = await started();
@@ -571,6 +582,55 @@ describe("DriverHost: driver messages become events", () => {
         payload: { capabilities: changed },
       },
     ]);
+  });
+
+  it("publishes filament only when it changes", async () => {
+    const { published, started, store } = await setup();
+    const driver = await started();
+    const changed = structuredClone(filamentFixture);
+    changed.units[0]!.slots[1]!.status = "active";
+
+    // Null at first, as nothing has been reported.
+    driver.emit({ type: "filament", filament: null });
+    driver.emit({ type: "filament", filament: filamentFixture });
+    driver.emit({
+      type: "filament",
+      filament: structuredClone(filamentFixture),
+    });
+    driver.emit({ type: "filament", filament: changed });
+    driver.emit({ type: "filament", filament: null });
+    driver.emit({ type: "filament", filament: null });
+    await settle();
+
+    expect(published()).toEqual(
+      [filamentFixture, changed, null].map((filament) => ({
+        type: "printer.filament_changed",
+        source: driverSource,
+        payload: { filament },
+      })),
+    );
+    expect(store.get(PRINTER_ID)?.state.filament).toBeNull();
+  });
+
+  it("keeps the filament readout while offline and across a restart", async () => {
+    const { drivers, host, published, run, started, store } = await setup();
+    const driver = await started();
+    driver.emit({ type: "filament", filament: filamentFixture });
+    driver.emit(status("offline"));
+    await settle();
+    expect(store.get(PRINTER_ID)?.state.filament).toEqual(filamentFixture);
+
+    await host.stop();
+    await host.start(run());
+    drivers
+      .latest(PRINTER_ID)
+      .emit({ type: "filament", filament: filamentFixture });
+    await settle();
+
+    expect(
+      published().filter(({ type }) => type === "printer.filament_changed"),
+    ).toHaveLength(1);
+    expect(store.get(PRINTER_ID)?.state.filament).toEqual(filamentFixture);
   });
 
   it("accepts a job that ended while the printer was offline", async () => {
@@ -1085,6 +1145,12 @@ describe("DriverHost: secrets", () => {
       fileName: `${SECRET}.gcode`,
     });
     driver.emit({
+      type: "filament",
+      filament: {
+        units: [{ ...filamentFixture.units[0]!, label: `Unit ${SECRET}` }],
+      },
+    });
+    driver.emit({
       type: "log",
       level: "info",
       message: `Connecting with ${SECRET}`,
@@ -1118,6 +1184,16 @@ describe("DriverHost: secrets", () => {
         {
           type: "printer.job_started",
           payload: { fileName: "[Redacted].gcode" },
+        },
+        {
+          type: "printer.filament_changed",
+          payload: {
+            filament: {
+              units: [
+                { ...filamentFixture.units[0]!, label: "Unit [Redacted]" },
+              ],
+            },
+          },
         },
       ],
     );

@@ -43,11 +43,16 @@ describe("JSON Schema", () => {
         "Capabilities",
         "CommandKind",
         "EventType",
+        "Filament",
+        "FilamentSlot",
+        "FilamentUnit",
+        "Heater",
         "JsonValue",
         "MotionMoveCommand",
         "OpsEvent",
         "PrinterCommand",
         "PrinterFile",
+        "PrinterFilamentChangedEvent",
         "PrinterSnapshot",
         "PrinterState",
         "PrinterStatus",
@@ -60,6 +65,27 @@ describe("JSON Schema", () => {
     );
     // Every definition has a name: none is one of Zod's anonymous __schema0s.
     expect(definitions.filter((name) => name.startsWith("__"))).toEqual([]);
+  });
+
+  it("describes a heater as settable with a limit, or read-only without one", () => {
+    const definitions = z.toJSONSchema(z.object({ PrinterSnapshot })).$defs;
+
+    expect(definitions?.Heater).toMatchObject({
+      oneOf: [
+        {
+          properties: {
+            controllable: { const: true },
+            maxC: { type: "number" },
+          },
+        },
+        {
+          properties: {
+            controllable: { const: false },
+            maxC: { type: "null" },
+          },
+        },
+      ],
+    });
   });
 
   it("refers to JsonValue rather than copying it", () => {
