@@ -4,7 +4,8 @@
 import type { components } from "../api/schema.gen.ts";
 
 // What the server sends for the simulated driver type (GET /api/driver-types),
-// written out: the web app can't import driver packages.
+// written out: the web app can't import driver packages. The server's test of
+// that route checks this copy against the real answer.
 
 /** The simulated printer's settings JSON Schema, as Zod writes it. */
 export const SIMULATED_SETTINGS_SCHEMA = {
