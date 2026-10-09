@@ -29,7 +29,7 @@ import {
   type MethodMessage,
   MQTT_PORT,
 } from "./protocol.ts";
-import { numberAt } from "./read.ts";
+import { numberAt, objectAt } from "./read.ts";
 import { Cc2Session, OpenError } from "./session.ts";
 import type { Cc2Settings } from "./settings.ts";
 import { StatusFeed } from "./status-feed.ts";
@@ -165,6 +165,8 @@ export class Cc2Driver implements PrinterDriver {
   #refetching = false;
   /** Problem codes already raised as alerts. */
   #exceptions = new Set<number>();
+  /** The printer's own status codes, as last logged. */
+  #codes = "";
   #disposed = false;
 
   constructor(
@@ -469,6 +471,7 @@ export class Cc2Driver implements PrinterDriver {
     this.#syncExceptions(status);
 
     const mapped = mapStatus(status);
+    this.#logCodes(status, mapped);
     const job = hasActiveJob(mapped.status)
       ? readJob(status, this.#totalLayers(status))
       : null;
@@ -509,6 +512,27 @@ export class Cc2Driver implements PrinterDriver {
       }
       this.#emit({ type: "job_lifecycle", event, fileName });
     }
+  }
+
+  /**
+   * Logs the printer's own status codes whenever they change, with what they
+   * mean here, so the codes behind each state can be checked on hardware.
+   */
+  #logCodes(status: JsonObject, mapped: MappedStatus): void {
+    const machine = objectAt(status, "machine_status");
+    const codes = {
+      status: numberAt(machine, "status"),
+      subStatus: numberAt(machine, "sub_status"),
+      exceptions: exceptionCodes(status),
+    };
+    const json = JSON.stringify(codes);
+    if (json === this.#codes) return;
+    this.#codes = json;
+    this.#log("info", "The printer reported new status codes.", {
+      ...codes,
+      ours: mapped.status,
+      detail: mapped.detail,
+    });
   }
 
   /** Raises an alert for each problem code the printer hasn't had before. */

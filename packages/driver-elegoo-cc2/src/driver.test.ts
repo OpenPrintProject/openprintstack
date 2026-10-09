@@ -122,6 +122,37 @@ describe("connecting", { timeout: 20_000 }, () => {
     expect(harness.protocolErrors).toEqual([]);
   });
 
+  it("logs the printer's own status codes when they change", async () => {
+    const { fake, harness } = await connected();
+
+    fake.update(printing(1405));
+    await until("preparing", statusIs(harness, "preparing"));
+    fake.update({ extruder: { temperature: 40 } });
+    fake.update({ machine_status: { sub_status: 2075 } });
+    await until("printing", statusIs(harness, "printing"));
+
+    const logged = sent(harness, "log").filter(
+      (message) => message.message === "The printer reported new status codes.",
+    );
+    expect(logged.map((message) => message.data)).toEqual([
+      { status: 1, subStatus: 0, exceptions: [], ours: "idle", detail: null },
+      {
+        status: 2,
+        subStatus: 1405,
+        exceptions: [],
+        ours: "preparing",
+        detail: "Heating the bed",
+      },
+      {
+        status: 2,
+        subStatus: 2075,
+        exceptions: [],
+        ours: "printing",
+        detail: null,
+      },
+    ]);
+  });
+
   it("logs in as elegoo with the access code", async () => {
     // The fake refuses anything else, so connecting at all shows it.
     const { harness } = await connected({ accessCode: "s3cret" });
@@ -521,7 +552,9 @@ describe("jobs", { timeout: 20_000 }, () => {
 
     const reported = harness.messages
       .slice(before)
-      .filter((message) => message.type !== "telemetry");
+      .filter(
+        (message) => message.type !== "telemetry" && message.type !== "log",
+      );
     expect(reported).toEqual([
       { type: "job_lifecycle", event: "started", fileName: "benchy.gcode" },
       {
