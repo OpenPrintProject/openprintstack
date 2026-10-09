@@ -1,0 +1,26 @@
+{
+  "name": "@openprintstack/driver-elegoo-cc2",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@openprintstack/driver-sdk": "workspace:*",
+    "@openprintstack/protocol": "workspace:*",
+    "mqtt": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "aedes": "^1.2.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

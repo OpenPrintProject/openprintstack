@@ -190,6 +190,16 @@ describe("the production build", { timeout: 30_000 }, () => {
       cookie: `${SESSION_COOKIE}=${token}`,
       "content-type": "application/json",
     };
+    // Every bundled driver loads, including the CC2's, whose MQTT client the
+    // build must find in node_modules. One that couldn't would be left out.
+    const types = await send(`${url}/api/driver-types`, { headers });
+    expect(types.status).toBe(200);
+    expect(
+      (
+        JSON.parse(types.body) as { driverTypes: { type: string }[] }
+      ).driverTypes.map((type) => type.type),
+    ).toEqual(["simulated", "elegoo-cc2"]);
+
     const added = await send(`${url}/api/printers`, {
       method: "POST",
       headers,
@@ -247,7 +257,12 @@ describe("the production build", { timeout: 30_000 }, () => {
     }
 
     expect(sources).toContain(path.join("src", "main.ts"));
-    for (const pkg of ["protocol", "driver-sdk", "driver-simulated"]) {
+    for (const pkg of [
+      "protocol",
+      "driver-sdk",
+      "driver-simulated",
+      "driver-elegoo-cc2",
+    ]) {
       expect(
         sources.some((source) =>
           source.startsWith(path.join("..", "..", "packages", pkg, "src")),

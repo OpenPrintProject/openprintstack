@@ -117,7 +117,7 @@ Some files are generated, and the checks fail when they're out of date. To regen
 
 ## Project Structure
 
-A pnpm workspace with two apps and three packages:
+A pnpm workspace with two apps and four packages:
 
 ```text
 apps/
@@ -134,6 +134,8 @@ packages/
   driver-sdk/          the contract every printer driver implements, and the tests every
                        driver must pass
   driver-simulated/    a simulated printer, for trying things out and for tests
+  driver-elegoo-cc2/   the Elegoo Centauri Carbon 2 (in progress: status so far), with a
+                       fake printer for its tests
 docs/
   phase-0.md           the plan for this first phase
   phase-1.md           the plan for the next phase: real printers, discovery and installers
